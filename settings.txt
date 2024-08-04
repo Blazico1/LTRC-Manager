@@ -1,0 +1,4 @@
+sheetname=LTRC
+style=Skyline (Nightfall).qss
+season=3
+season_column_offset=5
