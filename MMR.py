@@ -567,29 +567,22 @@ class LTRC_manager():
         
         # Loop through the racers and update their MMR
         for i in range(len(self.racers)):
-            # Skip the unplaced racers
-            if not self.is_placed[i]:
-                continue
             
             # Get the row of the racer
             row = self.Playerdata.find(self.racers[i]).row
 
-            # Update the MMR of the racer
-            self.Playerdata.update_cell(row, 4, int(self.MMR_new[i]))
-            
-            # # Update the accolades of the racer
-            # current_accolades = int(self.Playerdata.cell(row, 5).value) if self.Playerdata.cell(row, 5).value is not None else 0
-            # updated_accolades = current_accolades + int(self.accolades[i])
-            # self.Playerdata.update_cell(row, 5, updated_accolades)
-
-            # Update the accolades of this season
-            # season = int(self.settings['season'])
-            # season_column_offset = int(self.settings['season_column_offset'])
             season_column = 6
 
             current_season_accolades = int(self.Playerdata.cell(row, season_column).value) if self.Playerdata.cell(row, season_column).value is not None else 0
             updated_season_accolades = current_season_accolades + int(self.accolades[i])
             self.Playerdata.update_cell(row, season_column, updated_season_accolades)
+
+            # Skip the unplaced racers as their MMR should not be updated
+            if not self.is_placed[i]:
+                continue
+            
+            # Update the MMR of the racer
+            self.Playerdata.update_cell(row, 4, int(self.MMR_new[i]))
             
     def update_placements_MMR(self):
         '''
