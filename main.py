@@ -1,6 +1,7 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QLabel, QHBoxLayout, QVBoxLayout, QComboBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QLabel, QHBoxLayout, QVBoxLayout, QComboBox, QMessageBox
 from PyQt6.QtCore import Qt, QCoreApplication
 import sys
+import traceback
 
 from MMR import LTRC_manager
 from settings import load_settings
@@ -219,5 +220,17 @@ def main_function():
     # Run the application
     sys.exit(app.exec())
 
+def handle_exception(exc_type, exc_value, exc_traceback):
+    # Create a message box to show the exception
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Icon.Critical)
+    msg.setText("Oi mate! You broke my program!")
+    msg.setInformativeText(f"{exc_type.__name__}: {exc_value}")
+    msg.setDetailedText(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+    msg.setWindowTitle("Error")
+    msg.exec()
+
 if __name__ == "__main__":
+    sys.excepthook = handle_exception
+
     main_function()
