@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QLabel, QHBoxLayout, QVBoxLayout, QComboBox, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QLabel, QHBoxLayout, QVBoxLayout, QComboBox, QMessageBox, QCheckBox
 from PyQt6.QtCore import Qt, QCoreApplication
 import sys
 import traceback
@@ -33,8 +33,13 @@ class MainWindow(QMainWindow):
         self.dropdown = QComboBox(self)
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
 
+        # Create a checkbox
+        self.checkbox = QCheckBox("32 track", self)
+        self.checkbox.toggled.connect(self.LTRC.handle_32track)
+
         # Add the start button and dropdown menu to the layout
         layout.addWidget(self.dropdown)
+        layout.addWidget(self.checkbox)
         layout.addWidget(self.start_button)
 
         # Create a widget to hold the layout
@@ -169,6 +174,9 @@ class LTRC_comms:
     def __init__(self):
         self.LTRC = LTRC_manager()
         pass
+
+    def handle_32track(self, checked):
+        self.LTRC.flag_32track = checked
 
     def get_table(self):
         self.LTRC.LTRC_routine()

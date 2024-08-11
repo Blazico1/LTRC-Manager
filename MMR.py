@@ -47,7 +47,6 @@ class LTRC_manager():
         # Authorize the clientsheet
         client = gspread.authorize(creds)
 
-
         # Get the instance of the Spreadsheet
         sheet = client.open(self.settings['sheetname']) 
 
@@ -71,6 +70,8 @@ class LTRC_manager():
             if cell1 != "" and cell2 != "":
                 self.mode = "6vs6"
             
+        # Toggle flag for 32 track mode
+        self.flag_32track = False
 
     def get_all(self):
         '''
@@ -375,6 +376,10 @@ class LTRC_manager():
                 delta_MMRs = [sum(delta_MMRs[i:i+6])/6 for i in range(0, len(delta_MMRs), 6)]
                 self.delta_MMRs = [delta_MMRs[i//6] for i in range(len(delta_MMRs)*6)]
         
+        # Modify MMR if 32 track mode is enabled
+        if self.flag_32track:
+            self.delta_MMRs = [delta_MMR * 2.67 if delta_MMR > 0 else delta_MMR * 0.67 for delta_MMR in self.delta_MMRs]
+        
         # Round the MMR changes to the nearest integer
         self.delta_MMRs = [int(round(delta_MMR)) for delta_MMR in self.delta_MMRs]
 
@@ -644,17 +649,19 @@ class LTRC_manager():
         self.calc_acolades()
 
 if __name__ == "__main__":
-    LTRC = LTRC_manager()
-    LTRC.LTRC_routine()
+    # LTRC = LTRC_manager()
+    # LTRC.LTRC_routine()
 
-    LTRC.fill_MMR_change_table()
-    LTRC.fill_accolades_table()
-    LTRC.update_placements_MMR()
-    # LTRC.update_sheet()
+    # LTRC.fill_MMR_change_table()
+    # LTRC.fill_accolades_table()
+    # LTRC.update_placements_MMR()
+    # # LTRC.update_sheet()
 
-    print(f"Mode: {LTRC.mode}")
-    print(f"Racers: {LTRC.racers}")
-    print(f"Old MMRs: {LTRC.LR_list}")
-    print(f"Change in MMR: {LTRC.delta_MMRs}")
-    # print(f"New MMRs: {LTRC.MMR_new}")
-    print(f"Accolades: {LTRC.accolades}")
+    # print(f"Mode: {LTRC.mode}")
+    # print(f"Racers: {LTRC.racers}")
+    # print(f"Old MMRs: {LTRC.LR_list}")
+    # print(f"Change in MMR: {LTRC.delta_MMRs}")
+    # # print(f"New MMRs: {LTRC.MMR_new}")
+    # print(f"Accolades: {LTRC.accolades}")
+
+    print("Don't run this script you big dummy!")
