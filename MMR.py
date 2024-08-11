@@ -179,6 +179,8 @@ class LTRC_manager():
                 # Get the name of the racer and their score
                 racer = self.racers[i]
                 points = [self.scores[i]]
+                if self.flag_32track:
+                    points[0] /= 2.67
     
                 # Look for the racer in the placements
                 location = self.Placements.find(racer)
