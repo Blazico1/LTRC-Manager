@@ -1,7 +1,6 @@
 import sys
 import traceback
-from PyQt6.QtWidgets import QApplication, QMessageBox, QSizePolicy
-
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from model import LTRCModel
 from view import LTRCView
