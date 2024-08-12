@@ -80,6 +80,10 @@ class LTRC_manager():
         self.get_racers()
         self.get_scores()
         self.get_MMRs()
+
+        if len(self.racers) != len(self.scores) or len(self.racers) != len(self.MMRs):
+            raise ValueError("The number of racers, scores and MMRs do not match")
+        
         self.calculate_placement()
 
         # Calculate the average MMR of the room
@@ -110,6 +114,9 @@ class LTRC_manager():
                 racers = self.TR_Tables.get("B92:B104")
                 self.racers = [value for sublist in racers for value in sublist if value != '']
 
+        if len(self.racers) == 0:
+            raise ValueError("No racers found in the sheet") 
+
     def get_scores(self):
         '''
         This method returns the scores of the racers
@@ -134,6 +141,9 @@ class LTRC_manager():
             case "6vs6":
                 scores = self.TR_Tables.get("C92:C104")
                 self.scores = [int(value) for sublist in scores for value in sublist if value != '']
+
+        if len(self.scores) == 0:
+            raise ValueError("No scores found in the sheet")
 
     def get_MMRs(self):
         '''
@@ -160,6 +170,9 @@ class LTRC_manager():
                 MMRs = self.TR_Tables.get("E92:E104")
                 self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
 
+        if len(self.MMRs) == 0:
+            raise ValueError("No MMRs found in the sheet")
+        
     def calculate_placement(self):
         '''
         This method assumes the MMR of unplaced racers and calculates their placements
