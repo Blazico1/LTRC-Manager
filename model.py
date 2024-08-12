@@ -34,6 +34,7 @@ class LTRCModel:
         # Write the data to the table
         self.LTRC.fill_MMR_change_table()
         self.LTRC.fill_accolades_table()
+        self.LTRC.fill_rank_change_table()
 
     def update_sheet(self):
         self.LTRC.update_placements_MMR()
