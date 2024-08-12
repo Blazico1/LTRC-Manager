@@ -182,6 +182,7 @@ class LTRC_manager():
         self.LR_list = []
         self.is_placed = []
         self.placement_updates = []
+        self.completion= []
 
         averages = [] #debug list
     
@@ -206,6 +207,7 @@ class LTRC_manager():
                         j += 1
     
                     row = j
+                    self.completion.append("1/3")
                     self.placement_updates.append((row, 1, racer))
                     self.placement_updates.append((row, 2, "1/3"))
                     self.placement_updates.append((row, 4, points[0]))
@@ -214,10 +216,12 @@ class LTRC_manager():
                     row = location.row
                     completion = self.Placements.cell(row, 2).value
                     if completion is None:
+                        self.completion.append("1/3")
                         self.placement_updates.append((row, 2, "1/3"))
                         self.placement_updates.append((row, 4, points[0]))
                         
                     if completion == "1/3":
+                        self.completion.append("2/3")
                         self.placement_updates.append((row, 2, "2/3"))
                         self.placement_updates.append((row, 5, points[0]))
     
@@ -225,6 +229,7 @@ class LTRC_manager():
                         points.append(int(self.Placements.cell(row,4).value))
                     
                     elif completion == "2/3":
+                        self.completion.append("")
                         # This event places the racer
                         self.is_placed[i] = True
 
@@ -264,6 +269,7 @@ class LTRC_manager():
                 self.LR_list.append(MMR)
             else:
                 self.is_placed.append(True)
+                self.completion.append("")
                 self.LR_list.append(int(MMRs[i]))
 
         print(averages) #debug list
@@ -576,6 +582,98 @@ class LTRC_manager():
                 self.TR_Tables.update("J92:J105", [[accolade] for accolade in accolades])  
             case "6vs6":
                 self.TR_Tables.update("J92:J105", [[accolade] for accolade in accolades])       
+    
+    def fill_rank_change_table(self):
+        '''
+        This method fills the rank change table in the spreadsheet
+        '''
+        # Dictionary holding the rank ranges
+        rankings_dict = {0: "Tin", 1: "Tin", 2: "Bronze", 3: "Silver", 
+                         4: "Gold", 5: "Emerald", 6: "Sapphire", 
+                         7: "Ruby", 8: "Duke", 9: "Master", 
+                         10: "Grandmaster", 11: "Monarch", 12: "Monarch",
+                         13: "Monarch", 14: "Monarch", 15: "Sovereign"}
+        
+        # Get the old MMRs and the new MMRs
+        old_ranks = [int(item)//1000 if item != "???" else -1 for item in self.MMRs]
+        new_ranks = [int(item)//1000 for item in self.MMR_new]
+
+        # Take the difference between the old and new ranks
+        differences = np.subtract(new_ranks, old_ranks)
+
+        # List holding the rank changes as strings
+        rank_changes = []
+        up_down = []
+
+        for i, difference in enumerate(differences):
+            if not self.is_placed[i]:
+                # Racer is unplaced
+                rank_changes.append(self.completion[i])
+                up_down.append("-")
+
+            elif difference == 0:
+                # No change in rank
+                rank_changes.append("")
+                up_down.append("-")
+            else:
+                if rankings_dict[old_ranks[i]] == rankings_dict[new_ranks[i]]:
+                    # No change in rank
+                    rank_changes.append("")
+                    up_down.append("-")
+                else:
+                    # Change in rank
+                    rank_changes.append(rankings_dict[new_ranks[i]])
+                    if difference > 0:
+                        up_down.append("▲")
+                    else:
+                        up_down.append("▼")
+
+        # Fill the rank change table
+        match self.mode:
+            case "FFA":
+                x = 1
+            case "2vs2":
+                x = 2
+            case "3vs3":
+                x = 3
+            case "4vs4":
+                x = 4
+            case "5vs5":
+                x = 5
+            case "6vs6":
+                x = 6
+
+        rank_changes_list = []
+        up_down_list = []
+
+        # Add blank spaces to the list
+        for i, value in enumerate(rank_changes):
+            rank_changes_list.append(value)
+            up_down_list.append(up_down[i])
+
+            if (i + 1) % x == 0:
+                rank_changes_list.append("")
+                up_down_list.append("")
+
+        match self.mode:
+            case "FFA":
+                self.TR_Tables.update("I3:I14", [[rank_change] for rank_change in rank_changes])
+                self.TR_Tables.update("H3:H14", [[up_down] for up_down in up_down])
+            case "2vs2":
+                self.TR_Tables.update("I23:I40", [[rank_change] for rank_change in rank_changes_list])
+                self.TR_Tables.update("H23:H40", [[up_down] for up_down in up_down_list])
+            case "3vs3":
+                self.TR_Tables.update("I48:I63", [[rank_change] for rank_change in rank_changes_list])
+                self.TR_Tables.update("H48:H63", [[up_down] for up_down in up_down_list])
+            case "4vs4":
+                self.TR_Tables.update("I71:I85", [[rank_change] for rank_change in rank_changes_list])
+                self.TR_Tables.update("H71:H85", [[up_down] for up_down in up_down_list])
+            case "5vs5":
+                self.TR_Tables.update("I92:I105", [[rank_change] for rank_change in rank_changes_list])
+                self.TR_Tables.update("H92:H105", [[up_down] for up_down in up_down_list])
+            case "6vs6":
+                self.TR_Tables.update("I92:I105", [[rank_change] for rank_change in rank_changes_list])
+                self.TR_Tables.update("H92:H105", [[up_down] for up_down in up_down_list])
 
     def update_sheet(self):
         '''
@@ -630,31 +728,43 @@ class LTRC_manager():
                 self.TR_Tables.update("C3:C14", [[""] for _ in range(12)])
                 self.TR_Tables.update("F3:F14", [[""] for _ in range(12)])
                 self.TR_Tables.update("J3:J14", [[""] for _ in range(12)])
+                self.TR_Tables.update("H3:H14", [["-"] for _ in range(12)])
+                self.TR_Tables.update("I3:I14", [[""] for _ in range(12)])
             case "2vs2":
                 self.TR_Tables.update("B23:B39", [[""] for _ in range(17)])
                 self.TR_Tables.update("C23:C39", [[""] for _ in range(17)])
                 self.TR_Tables.update("F23:F39", [[""] for _ in range(17)])
                 self.TR_Tables.update("J23:J39", [[""] for _ in range(17)])
+                self.TR_Tables.update("H23:H39", [["-"] for _ in range(17)])
+                self.TR_Tables.update("I23:I39", [[""] for _ in range(17)])
             case "3vs3":
                 self.TR_Tables.update("B48:B62", [[""] for _ in range(15)])
                 self.TR_Tables.update("C48:C62", [[""] for _ in range(15)])
                 self.TR_Tables.update("F48:F62", [[""] for _ in range(15)])
                 self.TR_Tables.update("J48:J62", [[""] for _ in range(15)])
+                self.TR_Tables.update("H48:H62", [["-"] for _ in range(15)])
+                self.TR_Tables.update("I48:I62", [[""] for _ in range(15)])
             case "4vs4":
                 self.TR_Tables.update("B71:B84", [[""] for _ in range(14)])
                 self.TR_Tables.update("C71:C84", [[""] for _ in range(14)])
                 self.TR_Tables.update("F71:F84", [[""] for _ in range(14)])
                 self.TR_Tables.update("J71:J84", [[""] for _ in range(14)])
+                self.TR_Tables.update("H71:H84", [["-"] for _ in range(14)])
+                self.TR_Tables.update("I71:I84", [[""] for _ in range(14)])
             case "5vs5":
                 self.TR_Tables.update("B92:B104", [[""] for _ in range(14)])
                 self.TR_Tables.update("C92:C104", [[""] for _ in range(14)])
                 self.TR_Tables.update("F92:F104", [[""] for _ in range(14)])
                 self.TR_Tables.update("J92:J104", [[""] for _ in range(14)])
+                self.TR_Tables.update("H92:H104", [["-"] for _ in range(14)])
+                self.TR_Tables.update("I92:I104", [[""] for _ in range(14)])
             case "6vs6":
                 self.TR_Tables.update("B92:B104", [[""] for _ in range(14)])
                 self.TR_Tables.update("C92:C104", [[""] for _ in range(14)])
                 self.TR_Tables.update("F92:F104", [[""] for _ in range(14)])
                 self.TR_Tables.update("J92:J104", [[""] for _ in range(14)])
+                self.TR_Tables.update("H92:H104", [["-"] for _ in range(14)])
+                self.TR_Tables.update("I92:I104", [[""] for _ in range(14)])
 
     def LTRC_routine(self):
         self.get_all()
