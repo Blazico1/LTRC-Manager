@@ -616,7 +616,11 @@ class LTRC_manager():
                 rank_changes.append("")
                 up_down.append("-")
             else:
-                if rankings_dict[old_ranks[i]] == rankings_dict[new_ranks[i]]:
+                if old_ranks[i] == -1:
+                    # Racer had no previous rank
+                    rank_changes.append(rankings_dict[new_ranks[i]])
+                    up_down.append("▲")
+                elif rankings_dict[old_ranks[i]] == rankings_dict[new_ranks[i]]:
                     # No change in rank
                     rank_changes.append("")
                     up_down.append("-")
