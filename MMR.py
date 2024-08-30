@@ -62,13 +62,13 @@ class LTRC_manager():
         # Get the mode from the spreadsheet
         self.mode = self.Table_stuff.get("C1")[0][0] 
 
-        # Account for possible 6vs6 mode (12 players)
-        if self.mode == "5vs5":
-            cell1 = self.TR_Tables.get("C97")[0][0]
-            cell2 = self.TR_Tables.get("C105")[0][0]
-            # If the cells are not empty, the mode is 6vs6
-            if cell1 != "" and cell2 != "":
-                self.mode = "6vs6"
+        # # Account for possible 6vs6 mode (12 players)
+        # if self.mode == "5vs5":
+        #     cell1 = self.TR_Tables.get("C97")[0][0]
+        #     cell2 = self.TR_Tables.get("C105")[0][0]
+        #     # If the cells are not empty, the mode is 6vs6
+        #     if cell1 != "" and cell2 != "":
+        #         self.mode = "6vs6"
             
         # Toggle flag for 32 track mode
         self.flag_32track = False
@@ -528,6 +528,8 @@ class LTRC_manager():
             deltas.append(value)
             if (i + 1) % x == 0:
                 deltas.append("")
+                if x == 5:
+                    deltas.append("")
 
         match self.mode:
             case "FFA":
@@ -568,6 +570,8 @@ class LTRC_manager():
             accolades.append(value)
             if (i + 1) % x == 0:
                 accolades.append("")
+                if x == 5:
+                    accolades.append("")
 
         match self.mode:
             case "FFA":
@@ -658,6 +662,9 @@ class LTRC_manager():
             if (i + 1) % x == 0:
                 rank_changes_list.append("")
                 up_down_list.append("")
+                if x == 5:
+                    rank_changes_list.append("")
+                    up_down_list.append("")
 
         match self.mode:
             case "FFA":
@@ -756,19 +763,19 @@ class LTRC_manager():
                 self.TR_Tables.update("H71:H84", [["-"] for _ in range(14)])
                 self.TR_Tables.update("I71:I84", [[""] for _ in range(14)])
             case "5vs5":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(14)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(14)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(14)])
-                self.TR_Tables.update("J92:J104", [[""] for _ in range(14)])
-                self.TR_Tables.update("H92:H104", [["-"] for _ in range(14)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(14)])
+                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
+                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
+                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                self.TR_Tables.update("J92:J104", [[""] for _ in range(13)])
+                self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
+                self.TR_Tables.update("I92:I104", [[""] for _ in range(13)])
             case "6vs6":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(14)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(14)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(14)])
-                self.TR_Tables.update("J92:J104", [[""] for _ in range(14)])
-                self.TR_Tables.update("H92:H104", [["-"] for _ in range(14)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(14)])
+                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
+                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
+                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                self.TR_Tables.update("J92:J104", [[""] for _ in range(13)])
+                self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
+                self.TR_Tables.update("I92:I104", [[""] for _ in range(113)])
 
     def LTRC_routine(self):
         self.get_all()
