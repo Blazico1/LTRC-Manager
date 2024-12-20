@@ -257,7 +257,7 @@ class LTRC_manager():
 
                     # Get the previous season MMR
                     row_playerdata = self.Playerdata.find(racer).row
-                    previous_season_MMR = self.Playerdata.cell(row_playerdata, 10).value
+                    previous_season_MMR = self.Playerdata.cell(row_playerdata, 11).value
 
                     if previous_season_MMR is not None and previous_season_MMR != "???":
                         previous_season_MMR = int(previous_season_MMR)

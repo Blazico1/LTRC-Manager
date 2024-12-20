@@ -4,7 +4,7 @@ from PyQt6.QtCore import Qt, QCoreApplication
 class LTRCView(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LTRC Manager")
+        self.setWindowTitle("LTRC Manager v0.4.0")
         self.resize(800, 600)
 
         self.central_widget = QWidget()
