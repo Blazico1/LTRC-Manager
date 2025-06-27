@@ -191,29 +191,29 @@ class LTRC_manager():
         
         # If there are new players, add them to both sheets
         if new_players:
+            # Get all player names from Playerdata to find empty rows efficiently
+            playerdata_names = self.Playerdata.col_values(1)
+            playerdata_row = len(playerdata_names) + 1  # First empty row
+            
+            # Get all player names from Placements to find empty rows efficiently
+            placements_names = self.Placements.col_values(1)
+            placements_row = len(placements_names) + 1  # First empty row
+            
+            # If Placements has header rows, adjust the start index
+            if placements_row < 5:
+                placements_row = 5  # Start after header rows
+            
             for player in new_players:
-                # Add to Playerdata
-                # Find the first empty row in the Playerdata sheet
-                playerdata_row = 2  # Assuming row 1 is headers
-                while True:
-                    if not self.Playerdata.cell(playerdata_row, 1).value:
-                        break
-                    playerdata_row += 1
-                
                 # Add player to Playerdata
                 self.Playerdata.update_cell(playerdata_row, 1, player)  # Name
                 self.Playerdata.update_cell(playerdata_row, 4, "???")   # MMR
-                
-                # Add to Placements
-                # Find the first empty row in the Placements sheet
-                placements_row = 5  # Start after header rows
-                while self.Placements.cell(placements_row, 1).value is not None:
-                    placements_row += 1
+                playerdata_row += 1
                 
                 # Add player to Placements
                 self.Placements.update_cell(placements_row, 1, player)  # Name
                 self.Placements.update_cell(placements_row, 2, "")      # Completion
                 self.Placements.update_cell(placements_row, 8, "0")     # MMR Accumulation
+                placements_row += 1
             
             print(f"Added {len(new_players)} new player(s) to the sheets: {', '.join(new_players)}")
 
