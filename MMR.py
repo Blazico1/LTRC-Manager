@@ -77,6 +77,7 @@ class LTRC_manager():
         '''
         This method reads all the required data from the spreadsheet
         '''
+        
         self.get_racers()
         self.get_scores()
         self.get_MMRs()
@@ -116,6 +117,8 @@ class LTRC_manager():
 
         if len(self.racers) == 0:
             raise ValueError("No racers found in the sheet") 
+        
+        self.handle_new_players()
 
     def get_scores(self):
         '''
@@ -172,7 +175,48 @@ class LTRC_manager():
 
         if len(self.MMRs) == 0:
             raise ValueError("No MMRs found in the sheet")
+    
+    def handle_new_players(self):
+        '''
+        This method checks for new players and adds them to both Playerdata and Placements tabs
+        '''
+        new_players = []
         
+        # Check each racer to see if they exist in the Playerdata sheet
+        for racer in self.racers:
+            cell = self.Playerdata.find(racer)
+            if cell is None:
+                # If the racer is not found, add them to the new_players list
+                new_players.append(racer)
+        
+        # If there are new players, add them to both sheets
+        if new_players:
+            for player in new_players:
+                # Add to Playerdata
+                # Find the first empty row in the Playerdata sheet
+                playerdata_row = 2  # Assuming row 1 is headers
+                while True:
+                    if not self.Playerdata.cell(playerdata_row, 1).value:
+                        break
+                    playerdata_row += 1
+                
+                # Add player to Playerdata
+                self.Playerdata.update_cell(playerdata_row, 1, player)  # Name
+                self.Playerdata.update_cell(playerdata_row, 4, "???")   # MMR
+                
+                # Add to Placements
+                # Find the first empty row in the Placements sheet
+                placements_row = 5  # Start after header rows
+                while self.Placements.cell(placements_row, 1).value is not None:
+                    placements_row += 1
+                
+                # Add player to Placements
+                self.Placements.update_cell(placements_row, 1, player)  # Name
+                self.Placements.update_cell(placements_row, 2, "")      # Completion
+                self.Placements.update_cell(placements_row, 8, "0")     # MMR Accumulation
+            
+            print(f"Added {len(new_players)} new player(s) to the sheets: {', '.join(new_players)}")
+
     def calculate_placement(self):
         '''
         This method assumes the MMR of unplaced racers and calculates their placements
