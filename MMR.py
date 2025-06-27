@@ -407,103 +407,6 @@ class LTRC_manager():
         # add the change in MMR to the old MMR
         self.MMR_new = np.add(self.LR_list, self.delta_MMRs)
 
-    def calc_acolades(self):
-        '''
-        This method calculates the acolades of the racers
-        '''
-
-        # Calculate average MMR of the teams and acquire beat and defeat values
-        match self.mode:
-            case "FFA":
-                average_MMRs = self.LR_list
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("E32:E43") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("E28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("E29")[0][0])
-                team_rankings = self.rankings
-            case "2vs2":
-                average_MMRs = [sum(self.LR_list[i:i+2])/2 for i in range(0, len(self.LR_list), 2)]
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("F32:F37") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("F28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("F29")[0][0])
-                team_rankings = [self.rankings[i*2] for i in range(len(self.rankings)//2)]
-            case "3vs3":
-                average_MMRs = [sum(self.LR_list[i:i+3])/3 for i in range(0, len(self.LR_list), 3)]
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("G32:G35") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("G28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("G29")[0][0])
-                team_rankings = [self.rankings[i*3] for i in range(len(self.rankings)//3)]
-            case "4vs4":
-                average_MMRs = [sum(self.LR_list[i:i+4])/4 for i in range(0, len(self.LR_list), 4)]
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("H32:H34") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("H28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("H29")[0][0])
-                team_rankings = [self.rankings[i*4] for i in range(len(self.rankings)//4)]
-            case "5vs5":
-                average_MMRs = [sum(self.LR_list[i:i+5])/5 for i in range(0, len(self.LR_list), 5)]
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("I32:I33") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("I28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("I29")[0][0])
-                team_rankings = [self.rankings[i*5] for i in range(len(self.rankings)//5)]
-            case "6vs6":
-                average_MMRs = [sum(self.LR_list[i:i+6])/6 for i in range(0, len(self.LR_list), 6)]
-                base_accolades = [int(value) for sublist in self.Table_stuff.get("I32:I33") for value in sublist]
-                beaten_higher_seed = int(self.Table_stuff.get("I28")[0][0])
-                defeated_lower_seed = int(self.Table_stuff.get("I29")[0][0])
-                team_rankings = [self.rankings[i*6] for i in range(len(self.rankings)//6)]
-
-        accolades = []
-        # Modify the acolades based on the rankings, taking ties into account
-        for ranking in team_rankings:
-            accolades.append(base_accolades[ranking-1])
-
-        # Calculate penalty reductions
-        max_MMR = max(average_MMRs)
-        reductions = []
-        for i in range(len(average_MMRs)):
-            dif = max_MMR - average_MMRs[i]
-            reduction = dif // 1000
-            if reduction > 10:
-                reductions.append(10)
-            else:
-                reductions.append(reduction)
-
-        # Calculate the acolades of the racers
-        for i in range(len(average_MMRs)):
-            for j in range(0,i):
-                # If the racer has been defeated by a lower seed
-                if average_MMRs[i] > average_MMRs[j] and self.rankings[i] > self.rankings[j]:
-                    accolades[i] += defeated_lower_seed
-
-            for j in range(i+1,len(average_MMRs)):
-                # If the racer has beaten a higher seed
-                if average_MMRs[i] < average_MMRs[j] and self.rankings[i] < self.rankings[j]:
-                    accolades[i] += beaten_higher_seed
-            
-            # Apply the penalty reduction
-            if accolades[i] < 0:
-                accolades[i] *= (1 - 0.1 * reductions[i])
-
-        # Split accolades from teams to individual racers
-        match self.mode:
-            case "FFA":
-                self.accolades = accolades
-            case "2vs2":
-                self.accolades = [accolade for accolade in accolades for _ in range(2)]
-            case "3vs3":
-                self.accolades = [accolade for accolade in accolades for _ in range(3)]
-            case "4vs4":
-                self.accolades = [accolade for accolade in accolades for _ in range(4)]
-            case "5vs5":
-                self.accolades = [accolade for accolade in accolades for _ in range(5)]
-            case "6vs6":
-                self.accolades = [accolade for accolade in accolades for _ in range(6)]
-        
-        # Round the accolades to the nearest integer
-        self.accolades = [int(round(accolade)) for accolade in self.accolades]
-
-        # Truncate the accolades to the number of racers
-        self.accolades = self.accolades[:len(self.racers)]
-
     def fill_MMR_change_table(self):
         '''
         This method fills the MMR change table in the spreadsheet
@@ -545,48 +448,6 @@ class LTRC_manager():
             case "6vs6":
                 self.TR_Tables.update("F92:F105", [[delta] for delta in deltas])
 
-    def fill_accolades_table(self):
-        '''
-        This method fills the accolades table in the spreadsheet
-        '''
-        match self.mode:
-            case "FFA":
-                x = 1
-            case "2vs2":
-                x = 2
-            case "3vs3":
-                x = 3
-            case "4vs4":
-                x = 4
-            case "5vs5":
-                x = 5
-            case "6vs6":
-                x = 6
-
-        accolades = []
-
-        # Add blank spaces to the list
-        for i, value in enumerate(self.accolades):
-            accolades.append(value)
-            if (i + 1) % x == 0:
-                accolades.append("")
-                if x == 5:
-                    accolades.append("")
-
-        match self.mode:
-            case "FFA":
-                self.TR_Tables.update("J3:J14", [[accolade] for accolade in self.accolades])
-            case "2vs2":
-                self.TR_Tables.update("J23:J40", [[accolade] for accolade in accolades])
-            case "3vs3":
-                self.TR_Tables.update("J48:J63", [[accolade] for accolade in accolades])
-            case "4vs4":
-                self.TR_Tables.update("J71:J85", [[accolade] for accolade in accolades])
-            case "5vs5":
-                self.TR_Tables.update("J92:J105", [[accolade] for accolade in accolades])  
-            case "6vs6":
-                self.TR_Tables.update("J92:J105", [[accolade] for accolade in accolades])       
-    
     def fill_rank_change_table(self):
         '''
         This method fills the rank change table in the spreadsheet
@@ -688,7 +549,7 @@ class LTRC_manager():
 
     def update_sheet(self):
         '''
-        This method updates the MMRs and accolades of the players on the sheet
+        This method updates the MMRs of the players on the sheet
         '''
         # Loop through the placements and update the cells
         for row, column, value in self.placement_updates:
@@ -699,12 +560,6 @@ class LTRC_manager():
             
             # Get the row of the racer
             row = self.Playerdata.find(self.racers[i]).row
-
-            season_column = 6
-
-            current_season_accolades = int(self.Playerdata.cell(row, season_column).value) if self.Playerdata.cell(row, season_column).value is not None else 0
-            updated_season_accolades = current_season_accolades + int(self.accolades[i])
-            self.Playerdata.update_cell(row, season_column, updated_season_accolades)
 
             # Skip the unplaced racers as their MMR should not be updated
             if not self.is_placed[i]:
@@ -731,49 +586,43 @@ class LTRC_manager():
         This method clears the TR tables
         '''
 
-        # Clear the Player, Score, Change and Accolades columns
+        # Clear the Player, Score and Change columns
 
         match self.mode:
             case "FFA":
                 self.TR_Tables.update("B3:B14", [[""] for _ in range(12)])
                 self.TR_Tables.update("C3:C14", [[""] for _ in range(12)])
                 self.TR_Tables.update("F3:F14", [[""] for _ in range(12)])
-                self.TR_Tables.update("J3:J14", [[""] for _ in range(12)])
                 self.TR_Tables.update("H3:H14", [["-"] for _ in range(12)])
                 self.TR_Tables.update("I3:I14", [[""] for _ in range(12)])
             case "2vs2":
                 self.TR_Tables.update("B23:B39", [[""] for _ in range(17)])
                 self.TR_Tables.update("C23:C39", [[""] for _ in range(17)])
                 self.TR_Tables.update("F23:F39", [[""] for _ in range(17)])
-                self.TR_Tables.update("J23:J39", [[""] for _ in range(17)])
                 self.TR_Tables.update("H23:H39", [["-"] for _ in range(17)])
                 self.TR_Tables.update("I23:I39", [[""] for _ in range(17)])
             case "3vs3":
                 self.TR_Tables.update("B48:B62", [[""] for _ in range(15)])
                 self.TR_Tables.update("C48:C62", [[""] for _ in range(15)])
                 self.TR_Tables.update("F48:F62", [[""] for _ in range(15)])
-                self.TR_Tables.update("J48:J62", [[""] for _ in range(15)])
                 self.TR_Tables.update("H48:H62", [["-"] for _ in range(15)])
                 self.TR_Tables.update("I48:I62", [[""] for _ in range(15)])
             case "4vs4":
                 self.TR_Tables.update("B71:B84", [[""] for _ in range(14)])
                 self.TR_Tables.update("C71:C84", [[""] for _ in range(14)])
                 self.TR_Tables.update("F71:F84", [[""] for _ in range(14)])
-                self.TR_Tables.update("J71:J84", [[""] for _ in range(14)])
                 self.TR_Tables.update("H71:H84", [["-"] for _ in range(14)])
                 self.TR_Tables.update("I71:I84", [[""] for _ in range(14)])
             case "5vs5":
                 self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
                 self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
                 self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
-                self.TR_Tables.update("J92:J104", [[""] for _ in range(13)])
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
                 self.TR_Tables.update("I92:I104", [[""] for _ in range(13)])
             case "6vs6":
                 self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
                 self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
                 self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
-                self.TR_Tables.update("J92:J104", [[""] for _ in range(13)])
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
                 self.TR_Tables.update("I92:I104", [[""] for _ in range(113)])
 
@@ -782,14 +631,12 @@ class LTRC_manager():
         self.find_ranking()
         self.find_k_values()
         self.calc_new_MMR()
-        self.calc_acolades()
-
+        
 if __name__ == "__main__":
     # LTRC = LTRC_manager()
     # LTRC.LTRC_routine()
 
     # LTRC.fill_MMR_change_table()
-    # LTRC.fill_accolades_table()
     # LTRC.update_placements_MMR()
     # # LTRC.update_sheet()
 
@@ -798,6 +645,5 @@ if __name__ == "__main__":
     # print(f"Old MMRs: {LTRC.LR_list}")
     # print(f"Change in MMR: {LTRC.delta_MMRs}")
     # # print(f"New MMRs: {LTRC.MMR_new}")
-    # print(f"Accolades: {LTRC.accolades}")
 
     print("Don't run this script you big dummy!")

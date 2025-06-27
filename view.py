@@ -4,7 +4,7 @@ from PyQt6.QtCore import Qt, QCoreApplication
 class LTRCView(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LTRC Manager v0.4.0")
+        self.setWindowTitle("LTRC Manager v0.4.1")
         self.resize(800, 600)
 
         self.central_widget = QWidget()
@@ -52,17 +52,17 @@ class LTRCView(QMainWindow):
         self.layout = QVBoxLayout(self.widget)
 
         # Get the data for the table
-        racers, scores, MMRs, deltas, new_MMRs, accolades = table_data
+        racers, scores, MMRs, deltas, new_MMRs = table_data
 
         # Create a table
-        self.table = QTableWidget(len(racers), 7, self)
+        self.table = QTableWidget(len(racers), 5, self)
 
         # Disable resizing of the table's columns and rows
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
 
         # Set the headers of the table
-        self.table.setHorizontalHeaderLabels(["Player","Score", "MMR", "Change", "New Rating", "Accolades", "Bonus Acc."])  # Set the header labels
+        self.table.setHorizontalHeaderLabels(["Player", "Score", "MMR", "Change", "New Rating"])  # Set the header labels
 
 
         # Fill the table with data
@@ -72,28 +72,16 @@ class LTRCView(QMainWindow):
             self.table.setItem(i, 2, QTableWidgetItem(MMRs[i]))
             self.table.setItem(i, 3, QTableWidgetItem(deltas[i]))
             self.table.setItem(i, 4, QTableWidgetItem(new_MMRs[i]))
-            self.table.setItem(i, 5, QTableWidgetItem(accolades[i]))
             
             # Set the flags for the items
-            for j in range(6):
+            for j in range(5):
                 self.table.item(i, j).setFlags(Qt.ItemFlag.ItemIsSelectable)
 
-            # Add an editable item to the last column
-            item = QTableWidgetItem('')
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)  # Set the ItemIsEditable flag
-            self.table.setItem(i, 6, item)
-
-        # Initialize a list to store the user input
-        self.bonus_accolades = ['' for _ in range(12)]
-
-        # Connect the cellChanged signal to the user_input_changed method
-        self.table.cellChanged.connect(self.user_input_changed)
-        
         # Add the table to the layout
         self.layout.addWidget(self.table)
 
         # Add the text to the layout
-        self.text = QLabel("Check if the data is correct.\nAdd bonus accolades in the final column. Accolade penalties are negative.\nPress continue to write the table on the sheet.", self)
+        self.text = QLabel("Check if the data is correct.\nPress continue to write the table on the sheet.", self)
         self.layout.addWidget(self.text)
 
         # Create a horizontal layout for the buttons
@@ -115,20 +103,13 @@ class LTRCView(QMainWindow):
         # Set the widget as the central widget
         self.setCentralWidget(self.widget)
      
-    def user_input_changed(self, row, column):
-        # If the changed cell is in the last column (the "User Input" column)
-        if column == 6:
-            # Update the user_input list with the new text
-            self.bonus_accolades[row] = self.table.item(row, column).text()
-
     def show_write_screen(self):
-
         # Create a widget to hold the text and button
         self.widget = QWidget(self)
         self.layout = QVBoxLayout(self.widget)
 
         # Create the text
-        self.final_text = QLabel(f"Make the table screenshot before continuing!\n\nWrite new MMR and accolades values to the sheet?", self)
+        self.final_text = QLabel(f"Make the table screenshot before continuing!\n\nWrite new MMR values to the sheet?", self)
         self.layout.addWidget(self.final_text)
 
         # Create the "Close" button
