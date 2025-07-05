@@ -127,6 +127,46 @@ class TournamentImageGenerator:
             else:
                 img.paste(mii_img, (x_pos, y_pos))
 
+    def _draw_miis_vertical(self, img, results, team_index, y_pos, center_x):
+        """
+        Draw Miis vertically alongside player names (for 5v5 and 6v6 formats)
+        
+        Args:
+            img: The PIL image to draw on
+            results: List of player results
+            team_index: Index of the team in the results list
+            y_pos: Starting vertical position
+            center_x: Horizontal center position for alignment
+            horizontal_spacing: Horizontal spacing between elements
+            
+        Returns:
+            None
+        """
+        # Get Mii configuration
+        mii_config = self.podium_style['mii']
+        mii_size = mii_config['size']
+        team_size = self.team_size
+        mii_y_offset = mii_config['y_offset']
+        x_offset = mii_config['x_offset']
+        mii_vertical_spacing = mii_config['horizontal_spacing']  
+        
+        # Calculate starting positions
+        mii_x = center_x - x_offset  # Use the configured x_offset value
+        mii_y_pos = y_pos + mii_y_offset  # Apply the y_offset from config
+        
+        # For each team member
+        for member_idx in range(team_size):
+            player_idx = team_index * team_size + member_idx
+            if player_idx < len(results):
+                player_data = results[player_idx]
+                player_name = player_data["name"]
+                
+                # Calculate vertical position for this Mii
+                member_y = mii_y_pos + (member_idx * (mii_size + mii_vertical_spacing))
+                
+                # Draw the Mii
+                self._draw_mii(img, player_name, mii_x, member_y, mii_size)
+
     def _draw_player_score_line(self, img, player_data, center_x, stats_y, stats_size, horizontal_spacing):
         """
         Draw the complete player score line with all stats and icons
@@ -384,31 +424,42 @@ class TournamentImageGenerator:
                 mii_y_offset = mii_config['y_offset']
                 team_size = self.format_config['team_size']
                 
-                # Apply y_offset to the current y_pos
-                mii_y_pos = y_pos + mii_y_offset
-                
-                # Calculate total width of all Miis to center them
-                total_miis = team_size
-                total_mii_width = (mii_size * total_miis) + (mii_horizontal_spacing * (total_miis - 1))
-                mii_start_x = podium_start_x - (total_mii_width // 2)
-                
-                # Draw Mii(s) for winning player/team
-                for team_member_idx in range(team_size):
-                    # Calculate team member index in results
-                    player_idx = i * team_size + team_member_idx
-                    if player_idx < len(results):
-                        player_data = results[player_idx]
-                        player_name = player_data["name"]
-                        
-                        # Calculate x position for this Mii
-                        x_pos = mii_start_x + (team_member_idx * (mii_size + mii_horizontal_spacing))
-                        
-                        # Draw the Mii using the helper method
-                        self._draw_mii(img, player_name, x_pos, mii_y_pos, mii_size)
-                
-                # Update y_pos after drawing Miis
-                mii_bottom_spacing = mii_config['bottom_spacing']
-                y_pos += mii_size + mii_bottom_spacing
+                # For larger team sizes (5v5, 6v6), draw Miis vertically
+                if team_size > 4:
+                    # Draw Miis vertically alongside player names using the new method
+                    self._draw_miis_vertical(
+                        img, 
+                        results, 
+                        i,  # team_index 
+                        y_pos, 
+                        podium_start_x
+                    )
+                else:
+                    # Apply y_offset to the current y_pos
+                    mii_y_pos = y_pos + mii_y_offset
+                    
+                    # Calculate total width of all Miis to center them
+                    total_miis = team_size
+                    total_mii_width = (mii_size * total_miis) + (mii_horizontal_spacing * (total_miis - 1))
+                    mii_start_x = podium_start_x - (total_mii_width // 2)
+                    
+                    # Draw Mii(s) for winning player/team
+                    for team_member_idx in range(team_size):
+                        # Calculate team member index in results
+                        player_idx = i * team_size + team_member_idx
+                        if player_idx < len(results):
+                            player_data = results[player_idx]
+                            player_name = player_data["name"]
+                            
+                            # Calculate x position for this Mii
+                            x_pos = mii_start_x + (team_member_idx * (mii_size + mii_horizontal_spacing))
+                            
+                            # Draw the Mii using the helper method
+                            self._draw_mii(img, player_name, x_pos, mii_y_pos, mii_size)
+                    
+                    # Update y_pos after drawing Miis
+                    mii_bottom_spacing = mii_config['bottom_spacing']
+                    y_pos += mii_size + mii_bottom_spacing
 
             # Draw player info for each team member
             name_color = self.podium_style['name_color']
@@ -457,37 +508,35 @@ class TournamentImageGenerator:
         # Get regular style configuration
         regular_style = self.format_config['regular_style']
         
-        # Get necessary parameters
+        # Get configuration parameters
         name_size = regular_style['name_size']
         stats_size = regular_style['stats_size']
         horizontal_spacing = regular_style['horizontal_spacing']
         row_spacing = regular_style['row_spacing']
         name_color = regular_style['name_color']
-        
-        # Get positioning parameters
         start_x = regular_style['start_x']
         start_y = regular_style['start_y']
         column_spacing = regular_style['column_spacing']
-        column_y_offset = regular_style['column_y_offset']  # Get the vertical offset for second column
+        column_y_offset = regular_style['column_y_offset']
         
-        # Track current position
+        # Initialize position tracking
         current_x = start_x
         current_y = start_y
         
-        # Calculate number of teams to display in the regular section
+        # Calculate number of teams in the regular section
         podium_players = self.podium_count * self.team_size
         regular_teams = (len(results) - podium_players) // self.team_size
         if (len(results) - podium_players) % self.team_size > 0:
-            regular_teams += 1  # Add one more team for remaining players
+            regular_teams += 1
         
-        # Draw remaining players in order
+        # Render each team
         for i in range(regular_teams):
-            # Calculate y-position with offset for second column
+            # Position for this team (with column offset if needed)
             draw_y = current_y
-            if current_x != start_x:  # If we're in the second column
-                draw_y += column_y_offset  # Apply the vertical offset
+            if current_x != start_x:
+                draw_y += column_y_offset
             
-            team_y_pos = draw_y  # Start position for the team
+            team_y_pos = draw_y
             
             # Draw each team member
             for team_member_idx in range(self.team_size):
@@ -501,10 +550,10 @@ class TournamentImageGenerator:
                         img,
                         player_data,
                         team_y_pos,
-                        0,  # No additional vertical offset needed
+                        0,
                         name_size,
                         stats_size,
-                        current_x,  # Use current_x as center_x
+                        current_x,
                         name_color,
                         horizontal_spacing
                     )
@@ -668,7 +717,7 @@ class TournamentImageGenerator:
 
 if __name__ == "__main__":
     # Example usage
-    generator = TournamentImageGenerator("4v4")
+    generator = TournamentImageGenerator("5v5")
     results = [
     {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 2185, "rank": "Duke", "rank_change": +1},
     {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 2072, "rank": "Gold", "rank_change": 0},
@@ -679,9 +728,7 @@ if __name__ == "__main__":
     {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528, "rank": "Bronze", "rank_change": +1},
     {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418, "rank": "Bronze", "rank_change": +1},
     {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305, "rank": "Duke", "rank_change": +1},
-    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, "rank": "Tin", "rank_change": +1},
-    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085, "rank": "Emerald", "rank_change": +1},
-    {"name": "King William III", "score": 75, "mmr_change": -5, "new_mmr": 975, "rank": "Monarch", "rank_change": -1},
+    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, "rank": "Tin", "rank_change": +1}
 ]
     subtitle = "Event A 12-12-1234"
     img = generator.generate(results, subtitle)
