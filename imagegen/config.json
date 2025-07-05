@@ -40,6 +40,7 @@
                 "shadow_offset": [3, 3]
             },
             "podium_style": {
+                "start_x": 400,
                 "start_y": 200,
                 "medal_width": 20,
                 "medal_height": 60,
@@ -81,21 +82,20 @@
                 "stats_sizes": [45, 40, 35]
             },
             "regular_style": {
-                "start_y": 230,
-                "position_x": 700,
-                "position_size": 30,
+                "start_x": 1100,
+                "start_y": 200,
                 "name_x": 750,
-                "name_size": 30,
+                "name_size": 60,
                 "name_color": "#FFFFFF",
-                "stats_x": 1000,
-                "stats_size": 25,
+                "stats_size": 35,
                 "icon_x": 1100,
                 "icon_size": [20, 20],
                 "row_spacing": 40,
                 "horizontal_spacing": 15,
                 "vertical_spacing": 20,
-                "y_offset": 75,
-                "center_x": 1100
+                "players_per_row": 2,
+                "column_y_offset": 80,
+                "column_spacing": 400
             }
         }
     }

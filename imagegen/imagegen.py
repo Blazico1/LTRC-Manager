@@ -306,6 +306,9 @@ class TournamentImageGenerator:
         position_offset_x = self.podium_style['position_offset_x']
         position_offset_y = self.podium_style['position_offset_y']
         
+        # Get the general podium start_x (for elements other than medals and Mii)
+        podium_start_x = self.podium_style.get('start_x', self.podium_style.get('center_x', 340))
+        
         # Initialize y position tracker - start at the configured start_y position
         y_pos = self.podium_style['start_y']
         
@@ -355,7 +358,9 @@ class TournamentImageGenerator:
                 winner_font_size = self.podium_style['winner']['font_size']
                 winner_font = ImageFont.truetype(self.font_file, winner_font_size)
                 winner_text = "WINNER"
-                center_x = self.podium_style['center_x']
+                
+                # Use podium_start_x for winner text positioning instead of center_x
+                center_x = podium_start_x  # Use the new start_x parameter
                 
                 # Calculate the x position to center the text
                 winner_width = draw.textlength(winner_text, font=winner_font)
@@ -372,10 +377,6 @@ class TournamentImageGenerator:
                 # After drawing the first position's row, increment y_pos
                 y_pos += medal_height + vertical_spacing
                 
-                # Draw Mii(s) for winning player/team
-                # Reset x_pos for the Mii on the new line
-                x_pos = self.podium_style['mii']['x_offset']
-                
                 # Get Mii configuration from the updated config structure
                 mii_config = self.podium_style['mii']
                 mii_size = mii_config['size']
@@ -386,70 +387,174 @@ class TournamentImageGenerator:
                 # Apply y_offset to the current y_pos
                 mii_y_pos = y_pos + mii_y_offset
                 
+                # Calculate total width of all Miis to center them
+                total_miis = min(team_size, len(results))
+                total_mii_width = (mii_size * total_miis) + (mii_horizontal_spacing * (total_miis - 1))
+                mii_start_x = podium_start_x - (total_mii_width // 2)
+                
                 # Draw Mii(s) for winning player/team
-                for team_member_idx in range(min(team_size, len(results))):
+                for team_member_idx in range(total_miis):
                     player_data = results[team_member_idx]
                     player_name = player_data["name"]
                     
+                    # Calculate x position for this Mii
+                    x_pos = mii_start_x + (team_member_idx * (mii_size + mii_horizontal_spacing))
+                    
                     # Draw the Mii using the helper method
                     self._draw_mii(img, player_name, x_pos, mii_y_pos, mii_size)
-                    
-                    # Update x_pos for next Mii (if in team format)
-                    x_pos += mii_size + mii_horizontal_spacing
                 
-                # Update y_pos after drawing Miis - use configurable spacing below Mii
+                # Update y_pos after drawing Miis
                 mii_bottom_spacing = mii_config.get('bottom_spacing', vertical_spacing)
                 y_pos += mii_size + mii_bottom_spacing
 
-            # Draw player name with position-specific size
+            # Draw player name and score line together, using the new start_x
             player_data = results[i]
-            player_name = player_data["name"]
-            
-            # Get name configuration (with position-specific size)
             name_color = self.podium_style['name_color']
-            center_x = self.podium_style['center_x']
+            center_x = podium_start_x  # Use the new start_x parameter
             
-            # Create font for player name with the position-specific size
-            name_font = ImageFont.truetype(self.font_file, name_size)
-            
-            # Calculate x position to center the player name
-            name_width = draw.textlength(player_name, font=name_font)
-            name_x = center_x - name_width // 2
-            
-            # Calculate vertical position for name based on y_pos
-            name_y = y_pos + position_offset_y
-            
-            # Draw player name centered at center_x
-            draw.text(
-                (name_x, name_y),
-                player_name,
-                fill=name_color,
-                font=name_font
-            )
-            
-            # Update y_pos after drawing name
-            y_pos += name_size + vertical_spacing
-            
-            # Calculate stats position based on current y_pos
-            stats_y = y_pos + position_offset_y
-            
-            # Draw player stats line with all components
-            self._draw_player_score_line(
-                img, 
-                results[i],
-                center_x, 
-                stats_y,
+            # Use consolidated method to draw name and score
+            y_pos = self._draw_player_info(
+                img,
+                player_data,
+                y_pos,
+                position_offset_y,
+                name_size,
                 stats_size,
+                center_x,
+                name_color,
                 horizontal_spacing
             )
-            
-            # Update y_pos after drawing stats
-            y_pos += stats_size + vertical_spacing
             
             # Add extra spacing between podium entries
             y_pos += vertical_spacing
         
         return img
+
+    def _render_regular_players(self, img, results):
+        """
+        Render the regular (non-podium) players section in two columns
+        
+        Args:
+            img: The PIL image to draw on
+            results: List of player results
+        """
+        draw = ImageDraw.Draw(img)
+        
+        # Get regular style configuration
+        regular_style = self.format_config['regular_style']
+        
+        # Get necessary parameters
+        name_size = regular_style['name_size']
+        stats_size = regular_style['stats_size']
+        horizontal_spacing = regular_style.get('horizontal_spacing', self.podium_style['horizontal_spacing'])
+        vertical_spacing = regular_style.get('vertical_spacing', self.podium_style['vertical_spacing'])
+        row_spacing = regular_style.get('row_spacing', vertical_spacing * 2)
+        name_color = regular_style['name_color']
+        
+        # Get column positions
+        start_x = regular_style.get('start_x', self.width // 2)
+        start_y = regular_style.get('start_y', 200)
+        column_y_offset = regular_style.get('column_y_offset', 0)
+        column_spacing = regular_style.get('column_spacing', 300)
+        
+        # Calculate number of players per column
+        remaining_players = len(results) - self.podium_count
+        players_per_column = (remaining_players + 1) // 2  # Divide evenly between columns
+        
+        # Draw players
+        for i in range(self.podium_count, len(results)):
+            # Calculate position within regular players
+            player_idx = i - self.podium_count
+            
+            # Determine column (0 or 1)
+            column = player_idx // players_per_column
+            position_in_column = player_idx % players_per_column
+            
+            # Calculate x position based on column
+            x_pos = start_x + (column * column_spacing)
+            
+            # Calculate y position with offset for second column
+            y_pos = start_y + (position_in_column * (name_size + stats_size + row_spacing))
+            if column == 1:  # Second column gets offset
+                y_pos += column_y_offset
+            
+            # Get player data
+            player_data = results[i]
+            
+            # Draw player name and stats
+            self._draw_player_info(
+                img,
+                player_data,
+                y_pos,
+                0,  # No additional vertical offset needed
+                name_size,
+                stats_size,
+                x_pos,  # Use x_pos directly as center_x
+                name_color,
+                horizontal_spacing
+            )
+        
+        return img
+
+    def _draw_player_info(self, img, player_data, y_pos, position_offset_y, name_size, stats_size, center_x, name_color, horizontal_spacing):
+        """
+        Draw player name and score line together
+        
+        Args:
+            img: The PIL image to draw on
+            player_data: Dictionary containing player information
+            y_pos: Current vertical position
+            position_offset_y: Vertical offset for elements
+            name_size: Font size for player name
+            stats_size: Font size for stats
+            center_x: Horizontal center position
+            name_color: Color for the player name
+            horizontal_spacing: Spacing between horizontal elements
+            
+        Returns:
+            Updated y_pos after drawing all elements
+        """
+        draw = ImageDraw.Draw(img)
+        player_name = player_data["name"]
+        
+        # Create font for player name
+        name_font = ImageFont.truetype(self.font_file, name_size)
+        
+        # Calculate x position to center the player name
+        name_width = draw.textlength(player_name, font=name_font)
+        name_x = center_x - name_width // 2
+        
+        # Calculate vertical position for name based on y_pos
+        name_y = y_pos + position_offset_y
+        
+        # Draw player name centered at center_x
+        draw.text(
+            (name_x, name_y),
+            player_name,
+            fill=name_color,
+            font=name_font
+        )
+        
+        # Update y_pos after drawing name
+        y_pos += name_size + self.podium_style['vertical_spacing']
+        
+        # Calculate stats position based on current y_pos
+        stats_y = y_pos + position_offset_y
+        
+        # Draw player stats line with all components
+        self._draw_player_score_line(
+            img, 
+            player_data,
+            center_x, 
+            stats_y,
+            stats_size,
+            horizontal_spacing
+        )
+        
+        # Update y_pos after drawing stats
+        y_pos += stats_size + self.podium_style['vertical_spacing']
+        
+        return y_pos
 
     def generate(self, results, subtitle=None):
         """
@@ -468,6 +573,10 @@ class TournamentImageGenerator:
         # Render podium section
         img = self._render_podium(img, results)
         
+        # Render regular players if there are more than podium count
+        if len(results) > self.podium_count:
+            img = self._render_regular_players(img, results)
+        
         return img
 
 if __name__ == "__main__":
@@ -484,8 +593,8 @@ if __name__ == "__main__":
     {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418, "rank": "Bronze", "rank_change": +1},
     {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305, "rank": "Duke", "rank_change": +1},
     {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, "rank": "Tin", "rank_change": +1},
-    {"name": "Rowan", "score": 85, "mmr_change": +1, "new_mmr": 1085, "rank": "Emerald", "rank_change": +1},
-    {"name": "KingWilliam", "score": 75, "mmr_change": -5, "new_mmr": 975, "rank": "Monarch", "rank_change": -1},
+    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085, "rank": "Emerald", "rank_change": +1},
+    {"name": "King William III", "score": 75, "mmr_change": -5, "new_mmr": 975, "rank": "Monarch", "rank_change": -1},
 ]
     subtitle = "Event A 12-12-1234"
     img = generator.generate(results, subtitle)
