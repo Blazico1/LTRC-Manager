@@ -18,22 +18,13 @@ class LTRCModel:
         MMRs = [f"{MMR}" for MMR in self.LTRC.MMRs]
 
         deltas = [f"{delta}" for delta in self.LTRC.delta_MMRs]
-        accolades = [f"{accolade}" for accolade in self.LTRC.accolades]
         new_MMRs = [f"{MMR}" for MMR in self.LTRC.MMR_new]
 
-        return racers, scores, MMRs, deltas, new_MMRs, accolades
+        return racers, scores, MMRs, deltas, new_MMRs
 
-    def write_table(self, bonus_accolades):
-        # Convert the bonus accolades to integers
-        bonus_accolades = [int(accolade) if accolade else 0 for accolade in bonus_accolades]
-
-        # Add the bonus accolades to the accolades
-        for i in range(len(self.LTRC.accolades)):
-            self.LTRC.accolades[i] += bonus_accolades[i]
-
+    def write_table(self):
         # Write the data to the table
         self.LTRC.fill_MMR_change_table()
-        self.LTRC.fill_accolades_table()
         self.LTRC.fill_rank_change_table()
 
     def update_sheet(self):

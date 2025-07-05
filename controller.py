@@ -23,7 +23,7 @@ class LTRCController:
         self.view.continue_button.clicked.connect(self.show_write_screen)
     
     def show_write_screen(self):
-        self.model.write_table(self.view.bonus_accolades)
+        self.model.write_table()
         self.view.show_write_screen()
         self.view.write_button.clicked.connect(self.show_write_loading)
 
