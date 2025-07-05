@@ -307,8 +307,8 @@ class TournamentImageGenerator:
         position_offset_y = self.podium_style['position_offset_y']
         
         # Get the general podium start_x (for elements other than medals and Mii)
-        podium_start_x = self.podium_style.get('start_x', self.podium_style.get('center_x', 340))
-        
+        podium_start_x = self.podium_style['start_x']
+
         # Initialize y position tracker - start at the configured start_y position
         y_pos = self.podium_style['start_y']
         
@@ -319,7 +319,7 @@ class TournamentImageGenerator:
             
             # Get position number and color
             position = str(i + 1)
-            medal_color = self.colors['positions'].get(position, self.colors['positions']['default'])
+            medal_color = self.colors['positions'][position]
             
             # Get size based on position
             position_size = self.podium_style['position_sizes'][i]
@@ -404,7 +404,7 @@ class TournamentImageGenerator:
                     self._draw_mii(img, player_name, x_pos, mii_y_pos, mii_size)
                 
                 # Update y_pos after drawing Miis
-                mii_bottom_spacing = mii_config.get('bottom_spacing', vertical_spacing)
+                mii_bottom_spacing = mii_config['bottom_spacing']
                 y_pos += mii_size + mii_bottom_spacing
 
             # Draw player name and score line together, using the new start_x
@@ -432,67 +432,64 @@ class TournamentImageGenerator:
 
     def _render_regular_players(self, img, results):
         """
-        Render the regular (non-podium) players section in two columns
+        Render the regular (non-podium) players section
         
         Args:
             img: The PIL image to draw on
             results: List of player results
         """
-        draw = ImageDraw.Draw(img)
-        
         # Get regular style configuration
         regular_style = self.format_config['regular_style']
         
         # Get necessary parameters
         name_size = regular_style['name_size']
         stats_size = regular_style['stats_size']
-        horizontal_spacing = regular_style.get('horizontal_spacing', self.podium_style['horizontal_spacing'])
-        vertical_spacing = regular_style.get('vertical_spacing', self.podium_style['vertical_spacing'])
-        row_spacing = regular_style.get('row_spacing', vertical_spacing * 2)
+        horizontal_spacing = regular_style['horizontal_spacing']
+        row_spacing = regular_style['row_spacing']
         name_color = regular_style['name_color']
         
-        # Get column positions
-        start_x = regular_style.get('start_x', self.width // 2)
-        start_y = regular_style.get('start_y', 200)
-        column_y_offset = regular_style.get('column_y_offset', 0)
-        column_spacing = regular_style.get('column_spacing', 300)
+        # Get positioning parameters
+        start_x = regular_style['start_x']
+        start_y = regular_style['start_y']
+        column_spacing = regular_style['column_spacing']
+        column_y_offset = regular_style['column_y_offset']  # Get the vertical offset for second column
         
-        # Calculate number of players per column
-        remaining_players = len(results) - self.podium_count
-        players_per_column = (remaining_players + 1) // 2  # Divide evenly between columns
+        # Track current position
+        current_x = start_x
+        current_y = start_y
         
-        # Draw players
+        # Draw remaining players in order
         for i in range(self.podium_count, len(results)):
-            # Calculate position within regular players
-            player_idx = i - self.podium_count
-            
-            # Determine column (0 or 1)
-            column = player_idx // players_per_column
-            position_in_column = player_idx % players_per_column
-            
-            # Calculate x position based on column
-            x_pos = start_x + (column * column_spacing)
-            
-            # Calculate y position with offset for second column
-            y_pos = start_y + (position_in_column * (name_size + stats_size + row_spacing))
-            if column == 1:  # Second column gets offset
-                y_pos += column_y_offset
-            
             # Get player data
             player_data = results[i]
             
-            # Draw player name and stats
+            # Calculate y-position with offset for second column
+            draw_y = current_y
+            if current_x != start_x:  # If we're in the second column
+                draw_y += column_y_offset  # Apply the vertical offset
+            
+            # Draw player info
             self._draw_player_info(
                 img,
                 player_data,
-                y_pos,
+                draw_y,  # Use the adjusted y-position
                 0,  # No additional vertical offset needed
                 name_size,
                 stats_size,
-                x_pos,  # Use x_pos directly as center_x
+                current_x,  # Use current_x as center_x
                 name_color,
                 horizontal_spacing
             )
+            
+            # Move to next position
+            # Alternate between columns
+            if current_x == start_x:
+                # Move to second column
+                current_x += column_spacing
+            else:
+                # Move back to first column and down a row
+                current_x = start_x
+                current_y += name_size + stats_size + row_spacing
         
         return img
 
@@ -556,6 +553,41 @@ class TournamentImageGenerator:
         
         return y_pos
 
+    def _apply_shadow_to_image(self, img, shadow_color=(0, 0, 0), shadow_offset=(2, 2)):
+        """
+        Apply a shadow effect to the entire image by creating a copy and offsetting it
+        
+        Args:
+            img: The PIL image to apply shadow to
+            shadow_color: Color tuple for the shadow
+            shadow_offset: (x, y) offset for the shadow
+            
+        Returns:
+            New image with shadow effect
+        """
+        # Create a copy of the original image for the shadow
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+        
+        # Create a shadow image (black version of original)
+        shadow = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        shadow.paste(shadow_color, (0, 0), img.split()[3])  # Use alpha channel as mask
+        
+        # Create a new image that can fit both the original and the shadow
+        combined_width = img.width + abs(shadow_offset[0])
+        combined_height = img.height + abs(shadow_offset[1])
+        combined = Image.new('RGBA', (combined_width, combined_height), (0, 0, 0, 0))
+        
+        # Calculate paste positions
+        shadow_pos = (max(0, shadow_offset[0]), max(0, shadow_offset[1]))
+        img_pos = (max(0, -shadow_offset[0]), max(0, -shadow_offset[1]))
+        
+        # Paste shadow first, then the original image
+        combined.paste(shadow, shadow_pos, shadow.split()[3])
+        combined.paste(img, img_pos, img.split()[3])
+        
+        return combined
+
     def generate(self, results, subtitle=None):
         """
         Generate the tournament results image
@@ -564,20 +596,41 @@ class TournamentImageGenerator:
             results: List of player/team results to display
             subtitle: Optional subtitle text for the image
         """
-        # Create base image with background
-        img = self._create_base_image()
+        # Create a transparent canvas for drawing content
+        content_img = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
         
         # Add header (title and subtitle)
-        img = self._render_header(img, subtitle)
+        content_img = self._render_header(content_img, subtitle)
         
         # Render podium section
-        img = self._render_podium(img, results)
+        content_img = self._render_podium(content_img, results)
         
         # Render regular players if there are more than podium count
         if len(results) > self.podium_count:
-            img = self._render_regular_players(img, results)
+            content_img = self._render_regular_players(content_img, results)
         
-        return img
+        # Get shadow parameters
+        shadow_offset = tuple(self.header_config['shadow_offset'])
+        shadow_color = (0, 0, 0)  # Pure black
+        
+        # Apply shadow effect to the entire content
+        shadowed_img = self._apply_shadow_to_image(content_img, shadow_color, shadow_offset)
+        
+        # Create background
+        background = self._create_base_image()
+        
+        # Create final image by combining shadowed content with background
+        final_img = Image.new('RGBA', background.size, (0, 0, 0, 0))
+        final_img.paste(background, (0, 0))
+        
+        # Calculate position to center the shadowed image on background
+        x_pos = (background.width - shadowed_img.width) // 2
+        y_pos = (background.height - shadowed_img.height) // 2
+        
+        # Paste the shadowed content onto the background
+        final_img.paste(shadowed_img, (x_pos, y_pos), shadowed_img)
+        
+        return final_img
 
 if __name__ == "__main__":
     # Example usage

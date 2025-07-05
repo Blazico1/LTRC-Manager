@@ -6,6 +6,11 @@
     "background_color": "#460064",
     "background_image": "background.png",
     
+    "shadow": {
+        "color": [0, 0, 0, 180],
+        "blur_radius": 15
+    },
+    
     "colors": {
         "gold": "#FFD700",
         "silver": "#C0C0C0",
@@ -48,18 +53,11 @@
                 "position_offset_x": 10,
                 "position_offset_y": -20,
                 "position_size": 65,
-                "name_x": 150,
                 "name_size": 40,
                 "name_color": "#FFFFFF",
-                "stats_x": 500,
-                "stats_y_offset": 5,
                 "stats_size": 30,
-                "stats_spacing": 15,
-                "rank_icon_size": [30, 30],
                 "rank_change_icon_size": [15, 15],
                 "icon_y_offset": 15,
-                "icon_x": 700,
-                "icon_size": [24, 24],
                 "row_spacing": 40,
                 "winner": {
                     "y_offset": -30,
@@ -84,16 +82,12 @@
             "regular_style": {
                 "start_x": 1100,
                 "start_y": 200,
-                "name_x": 750,
                 "name_size": 60,
                 "name_color": "#FFFFFF",
                 "stats_size": 35,
-                "icon_x": 1100,
-                "icon_size": [20, 20],
-                "row_spacing": 40,
+                "row_spacing": 50,
                 "horizontal_spacing": 15,
                 "vertical_spacing": 20,
-                "players_per_row": 2,
                 "column_y_offset": 80,
                 "column_spacing": 400
             }
