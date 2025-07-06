@@ -1,6 +1,10 @@
 import json
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageColor
+import requests
+from io import BytesIO
+import time
+import threading
 
 # MMR Ranges
 # Tin: 0-1999
@@ -17,12 +21,13 @@ from PIL import Image, ImageDraw, ImageFont, ImageColor
 # Sovereign: 15000+
 
 class TournamentImageGenerator:
-    def __init__(self, format_type):
+    def __init__(self, format_type, progress_callback=None):
         """
         Initialize the tournament image generator with a specific format type.
         
         Args:
             format_type: The format of the tournament (e.g., "FFA", "2v2")
+            progress_callback: Optional callback function for progress updates
         """
         # Load configuration from the imagegen directory
         config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -37,7 +42,6 @@ class TournamentImageGenerator:
         self.height = self.config['height']
         self.font_file = self.config['font_file']
         self.colors = self.config['colors']
-        self.asset_dirs = self.config['asset_dirs']
         
         # Format specific configurations
         self.format_config = self.config['formats'][self.format_type]
@@ -45,6 +49,96 @@ class TournamentImageGenerator:
         self.podium_style = self.format_config['podium_style']
         self.podium_count = self.format_config['podium_count']
         self.team_size = self.format_config['team_size']
+
+        # Image cache for faster repeated loading - only caches original images
+        self.image_cache = {}
+        
+        # Progress tracking
+        self.progress_callback = progress_callback
+        self.total_steps = 0
+        self.completed_steps = 0
+        self.progress_lock = threading.Lock()
+        
+        # Create a session for HTTP requests that can be reused
+        self.session = requests.Session()
+        
+        # Configure session for better performance
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=10,
+            max_retries=1
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+        
+        # Request timeout
+        self.request_timeout = 5  # seconds
+
+    def _update_progress(self, increment=1, message=None):
+        """
+        Update the progress status and call the progress callback if set
+        
+        Args:
+            increment: Amount to increment the progress counter by
+            message: Optional message to include with the progress update
+        """
+        with self.progress_lock:
+            self.completed_steps += increment
+            progress = 0
+            if self.total_steps > 0:
+                progress = min(100, int(100 * self.completed_steps / self.total_steps))
+            
+            if self.progress_callback and callable(self.progress_callback):
+                self.progress_callback(progress, message)
+    
+    def _load_image_from_url(self, url, size=None):
+        """
+        Load an image from a URL with simple memory caching of original images
+        
+        Args:
+            url: URL to load the image from
+            size: Optional tuple (width, height) to resize the image
+            
+        Returns:
+            PIL.Image: Loaded image or None if failed
+        """
+        if not url:
+            return None
+            
+        # Check memory cache for original image
+        if url in self.image_cache:
+            img = self.image_cache[url]
+            # Resize if needed (don't cache the resized version)
+            if size and img.size != size:
+                return img.resize(size)
+            return img.copy()  # Return a copy to prevent modifications affecting the cached image
+        
+        # Load from URL if not in cache
+        try:
+            # Use session for connection pooling and timeout
+            response = self.session.get(url, stream=True, timeout=self.request_timeout)
+            if response.status_code == 200:
+                img = Image.open(BytesIO(response.content))
+                
+                # Convert to RGBA if needed
+                if img.mode == 'P' and 'transparency' in img.info:
+                    img = img.convert('RGBA')
+                elif img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # Cache the original image in memory
+                self.image_cache[url] = img
+                
+                # Return a resized copy if size is specified
+                if size and img.size != size:
+                    return img.resize(size)
+                return img.copy()  # Return a copy to prevent modifications affecting the cached image
+            else:
+                print(f"Failed to load image from URL: {url}")
+                return None
+        except Exception as e:
+            print(f"Error loading image from URL: {e}")
+            return None
 
     def _create_base_image(self):
         """Create the base image with background"""
@@ -95,46 +189,25 @@ class TournamentImageGenerator:
         
         return img
 
-    def _draw_mii(self, img, player_name, x_pos, y_pos, mii_size):
+    def _draw_mii(self, img, mii_url, x_pos, y_pos, mii_size):
         """
-        Draw a player's Mii image at the specified position
+        Draw a player's Mii image from URL at the specified position
         
         Args:
             img: The PIL image to draw on
-            player_name: Name of the player to load Mii for
+            mii_url: URL to the Mii image
             x_pos: X position to draw the Mii
-            y_pos: Y position to draw the Mii
+            y_pos: Y Position to draw the Mii
             mii_size: Size (width and height) of the Mii image
             
         Returns:
             None
         """
-        # Load player Mii image
-        mii_directory = self.asset_dirs['miis']
-        mii_filename = f"{player_name}.png"
-        mii_path = os.path.join(os.path.dirname(__file__), mii_directory, mii_filename)
-        default_mii_path = os.path.join(os.path.dirname(__file__), mii_directory, "Default.png")
+        # Load Mii image with caching
+        mii_img = self._load_image_from_url(mii_url, (mii_size, mii_size))
         
-        try:
-            # Try to load player's Mii
-            mii_img = Image.open(mii_path)
-            if mii_img.size != (mii_size, mii_size):
-                mii_img = mii_img.resize((mii_size, mii_size))
-        except (FileNotFoundError, IOError):
-            try:
-                # Fall back to default Mii
-                mii_img = Image.open(default_mii_path)
-                if mii_img.size != (mii_size, mii_size):
-                    mii_img = mii_img.resize((mii_size, mii_size))
-            except (FileNotFoundError, IOError):
-                mii_img = None
-        
-        # Paste Mii image if available
+        # Paste if loaded successfully
         if mii_img:
-            # Convert to RGBA if needed
-            if mii_img.mode == 'P' and 'transparency' in mii_img.info:
-                mii_img = mii_img.convert('RGBA')
-            
             # Paste with or without transparency mask
             if mii_img.mode == 'RGBA':
                 img.paste(mii_img, (x_pos, y_pos), mii_img)
@@ -151,7 +224,6 @@ class TournamentImageGenerator:
             team_index: Index of the team in the results list
             y_pos: Starting vertical position
             center_x: Horizontal center position for alignment
-            horizontal_spacing: Horizontal spacing between elements
             
         Returns:
             None
@@ -173,13 +245,13 @@ class TournamentImageGenerator:
             player_idx = team_index * team_size + member_idx
             if player_idx < len(results):
                 player_data = results[player_idx]
-                player_name = player_data["name"]
+                mii_url = player_data.get("mii", player_data["name"])
                 
                 # Calculate vertical position for this Mii
                 member_y = mii_y_pos + (member_idx * (mii_size + mii_vertical_spacing))
                 
-                # Draw the Mii
-                self._draw_mii(img, player_name, mii_x, member_y, mii_size)
+                # Draw the Mii - pass the URL directly
+                self._draw_mii(img, mii_url, mii_x, member_y, mii_size)
 
     def _determine_rank_from_mmr(self, mmr):
         """
@@ -265,32 +337,29 @@ class TournamentImageGenerator:
         # Calculate MMR color
         mmr_color = self.colors['mmr_up'] if mmr_change >= 0 else self.colors['mmr_down']
         
-        # Load icons for width calculation
-        rank_directory = self.asset_dirs['ranks']
-        
-        # Load direction icon
+        # Get direction icon URL based on rank change
+        direction_icon = None
+        direction_tint = None
         if rank_change > 0:
-            direction_file = "up.png"
+            direction_url = self.config['direction_icons']['up']
             direction_tint = self.colors['mmr_up']
         elif rank_change < 0:
-            direction_file = "down.png"
+            direction_url = self.config['direction_icons']['down']
             direction_tint = self.colors['mmr_down']
         else:
-            direction_file = "neutral.png"
+            direction_url = self.config['direction_icons']['neutral']
             direction_tint = None
-            
-        direction_icon_path = os.path.join(os.path.dirname(__file__), rank_directory, direction_file)
-        try:
-            direction_icon = Image.open(direction_icon_path)
-        except (FileNotFoundError, IOError):
-            direction_icon = None
         
-        # Load rank icon
-        rank_icon_path = os.path.join(os.path.dirname(__file__), rank_directory, f"{rank}.png")
-        try:
-            rank_icon = Image.open(rank_icon_path)
-        except (FileNotFoundError, IOError):
-            rank_icon = None
+        # Load direction icon with caching
+        rank_change_icon_size = (stats_size - 5, stats_size - 5)
+        direction_icon = self._load_image_from_url(direction_url, rank_change_icon_size)
+        
+        # Get rank icon from the config based on determined rank
+        rank_icon = None
+        rank_icon_size = (stats_size, stats_size)
+        if "rank_icons" in self.config and rank in self.config["rank_icons"]:
+            rank_icon_url = self.config["rank_icons"][rank]
+            rank_icon = self._load_image_from_url(rank_icon_url, rank_icon_size)
         
         # Calculate icon sizes
         rank_change_icon_size = (stats_size - 5, stats_size - 5)
@@ -346,43 +415,29 @@ class TournamentImageGenerator:
         icons_y = stats_y + (stats_size - rank_change_icon_size[1]) // 2 + int(icon_y_offset)
         
         # Draw direction icon
-        # Resize if needed
-        if direction_icon.size != rank_change_icon_size:
-            direction_icon = direction_icon.resize(rank_change_icon_size)
-        
-        # Apply tinting if needed
-        if direction_tint:
-            # Convert hex color to RGB tuple
-            rgb_color = ImageColor.getrgb(direction_tint)
+        if direction_icon:
+            # Apply tinting if needed
+            if direction_tint:
+                # Convert hex color to RGB tuple
+                rgb_color = ImageColor.getrgb(direction_tint)
+                
+                # Create a solid color image with our tint
+                tint = Image.new('RGBA', direction_icon.size, (*rgb_color, 255))
+                
+                # Apply tint by using the icon as a mask
+                mask = direction_icon.split()[3]
+                tinted_icon = Image.new('RGBA', direction_icon.size, (0, 0, 0, 0))
+                tinted_icon.paste(tint, (0, 0), mask)
+                direction_icon = tinted_icon
             
-            # Create a solid color image with our tint
-            tint = Image.new('RGBA', direction_icon.size, (*rgb_color, 255))
-            
-            # Apply tint by using the icon as a mask
-            mask = direction_icon.split()[3]
-            tinted_icon = Image.new('RGBA', direction_icon.size, (0, 0, 0, 0))
-            tinted_icon.paste(tint, (0, 0), mask)
-            direction_icon = tinted_icon
-        
-        # Ensure icon is in RGBA mode
-        if direction_icon.mode != 'RGBA':
-            direction_icon = direction_icon.convert('RGBA')
-        
-        # Paste direction icon
-        img.paste(direction_icon, (int(stats_x), int(icons_y)), direction_icon)
-        stats_x += rank_change_icon_size[0] + horizontal_spacing//2
+            # Paste direction icon
+            img.paste(direction_icon, (int(stats_x), int(icons_y)), direction_icon)
+            stats_x += rank_change_icon_size[0] + horizontal_spacing//2
         
         # Draw rank icon
-        # Resize if needed
-        if rank_icon.size != rank_icon_size:
-            rank_icon = rank_icon.resize(rank_icon_size)
-        
-        # Ensure icon is in RGBA mode
-        if rank_icon.mode != 'RGBA':
-            rank_icon = rank_icon.convert('RGBA')
-        
-        # Paste rank icon
-        img.paste(rank_icon, (int(stats_x), int(icons_y)), rank_icon)
+        if rank_icon:
+            # Paste rank icon
+            img.paste(rank_icon, (int(stats_x), int(icons_y)), rank_icon)
 
     def _render_podium(self, img, results):
         """
@@ -509,13 +564,13 @@ class TournamentImageGenerator:
                         player_idx = i * team_size + team_member_idx
                         if player_idx < len(results):
                             player_data = results[player_idx]
-                            player_name = player_data["name"]
+                            mii_url = player_data.get("mii", player_data["name"])
                             
                             # Calculate x position for this Mii
                             x_pos = mii_start_x + (team_member_idx * (mii_size + mii_horizontal_spacing))
                             
-                            # Draw the Mii using the helper method
-                            self._draw_mii(img, player_name, x_pos, mii_y_pos, mii_size)
+                            # Draw the Mii using the helper method - pass URL directly
+                            self._draw_mii(img, mii_url, x_pos, mii_y_pos, mii_size)
                     
                     # Update y_pos after drawing Miis
                     mii_bottom_spacing = mii_config['bottom_spacing']
@@ -731,6 +786,35 @@ class TournamentImageGenerator:
         
         return combined
 
+    def preload_common_assets(self):
+        """Preload commonly used assets in parallel"""
+        urls_to_load = []
+        
+        # Add direction icons
+        if 'direction_icons' in self.config:
+            urls_to_load.extend(self.config['direction_icons'].values())
+        
+        # Add rank icons
+        if 'rank_icons' in self.config:
+            urls_to_load.extend(self.config['rank_icons'].values())
+        
+        if not urls_to_load:
+            return
+            
+        print(f"Preloading {len(urls_to_load)} common assets...")
+        start_time = time.time()
+        
+        # Update progress tracking
+        self.total_steps += len(urls_to_load)
+        
+        # Load assets one by one (can be parallelized later if needed)
+        for url in urls_to_load:
+            self._load_image_from_url(url)
+            self._update_progress(1, f"Preloaded asset: {url[:30]}...")
+            
+        elapsed_time = time.time() - start_time
+        print(f"Preloaded {len(urls_to_load)} assets in {elapsed_time:.2f} seconds")
+
     def generate(self, results, subtitle=None):
         """
         Generate the tournament results image
@@ -739,18 +823,53 @@ class TournamentImageGenerator:
             results: List of player/team results to display
             subtitle: Optional subtitle text for the image
         """
+        start_time = time.time()
+        
+        # Reset progress tracking
+        self.completed_steps = 0
+        
+        # Calculate total steps for progress tracking
+        # 1 step for preloading, 1 for header, 1 for podium per team, 1 for regular players,
+        # 1 for shadow effect, 1 for background, and 1 for final composition
+        self.total_steps = 7
+        
+        # Add steps for each player (1 for loading Mii, 1 for rendering info)
+        self.total_steps += len(results) * 2
+        
+        # Preload common assets (rank icons, direction icons)
+        self.preload_common_assets()
+        self._update_progress(1, "Preloaded common assets")
+        
+        # Prefetch all Mii images
+        mii_urls = []
+        for player in results:
+            if "mii" in player:
+                mii_urls.append(player["mii"])
+                
+        if mii_urls:
+            print(f"Prefetching {len(mii_urls)} Mii images...")
+            prefetch_start = time.time()
+            for url in mii_urls:
+                self._load_image_from_url(url)
+                self._update_progress(1, f"Loaded Mii: {url[:30]}...")
+            elapsed = time.time() - prefetch_start
+            print(f"Prefetched {len(mii_urls)} Mii images in {elapsed:.2f} seconds")
+        
         # Create a transparent canvas for drawing content
         content_img = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
         
         # Add header (title and subtitle)
         content_img = self._render_header(content_img, subtitle)
+        self._update_progress(1, "Rendered header")
         
         # Render podium section
         content_img = self._render_podium(content_img, results)
+        self._update_progress(1, "Rendered podium")
         
         # Render regular players if there are more than podium count
         if len(results) > self.podium_count:
             content_img = self._render_regular_players(content_img, results)
+        self._update_progress(1, "Rendered regular players")
         
         # Get shadow parameters
         shadow_offset = tuple(self.header_config['shadow_offset'])
@@ -758,9 +877,11 @@ class TournamentImageGenerator:
         
         # Apply shadow effect to the entire content
         shadowed_img = self._apply_shadow_to_image(content_img, shadow_color, shadow_offset)
+        self._update_progress(1, "Applied shadow effect")
         
         # Create background
         background = self._create_base_image()
+        self._update_progress(1, "Created background")
         
         # Create final image by combining shadowed content with background
         final_img = Image.new('RGBA', background.size, (0, 0, 0, 0))
@@ -772,26 +893,69 @@ class TournamentImageGenerator:
         
         # Paste the shadowed content onto the background
         final_img.paste(shadowed_img, (x_pos, y_pos), shadowed_img)
+        self._update_progress(1, "Completed final composition")
+        
+        # Report total generation time
+        elapsed_time = time.time() - start_time
+        print(f"Image generation completed in {elapsed_time:.2f} seconds")
         
         return final_img
 
 if __name__ == "__main__":
-    # Example usage
-    generator = TournamentImageGenerator("6v6")
+    # Example usage with a simple console progress display
+    def print_progress(percentage, message=None):
+        bar_length = 20
+        filled_length = int(bar_length * percentage / 100)
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        msg = f" | {message}" if message else ""
+        print(f"\r[{bar}] {percentage}%{msg}", end='', flush=True)
+        if percentage == 100:
+            print()  # Add newline at the end
+    
+    # Create generator with progress callback
+    generator = TournamentImageGenerator("6v6", progress_callback=print_progress)
+    
+    # Sample Mii URL
+    mii_url = "https://drive.google.com/uc?export=view&id=1s0syKxjMrYl3PP3pLxYrsppR3IsAznrY"
+    
     results = [
-    {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 2185},
-    {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 2072},
-    {"name": "KogMawMain", "score": 168, "mmr_change": +25, "new_mmr": 1968},
-    {"name": "Gaberboo", "score": 155, "mmr_change": +22, "new_mmr": 1855},
-    {"name": "TealS", "score": 142, "mmr_change": +18, "new_mmr": 1742},
-    {"name": "Fern", "score": 135, "mmr_change": +15, "new_mmr": 1635},
-    {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528},
-    {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418},
-    {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305},
-    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195},
-    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085},
-    {"name": "King William III", "score": 75, "mmr_change": 0, "new_mmr": 1000}
-]
+    {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 5000, 
+     "mii": "https://drive.google.com/uc?export=view&id=1V3ScziEfb7dHyKwW_esaqlyY61oKPz5C"},
+     
+    {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 3999, 
+     "mii": "https://drive.google.com/uc?export=view&id=1yv6EPg1lZd7O5DKQ8fcKCGaDHKB7KVO_"},
+     
+    {"name": "KogMawMain", "score": 168, "mmr_change": +25, "new_mmr": 1968, 
+     "mii": "https://drive.google.com/uc?export=view&id=1vIbLh7lDv7ud_HoEaceEGJVzTFkLb0Vx"},
+     
+    {"name": "Gaberboo", "score": 155, "mmr_change": +22, "new_mmr": 1855, 
+     "mii": mii_url},
+     
+    {"name": "TealS", "score": 142, "mmr_change": +18, "new_mmr": 1742, 
+     "mii": mii_url},
+     
+    {"name": "Fern", "score": 135, "mmr_change": +15, "new_mmr": 1635, 
+     "mii": mii_url},
+     
+    {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528, 
+     "mii": mii_url},
+     
+    {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418, 
+     "mii": mii_url},
+     
+    {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305, 
+     "mii": mii_url},
+     
+    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, 
+     "mii": mii_url},
+     
+    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085, 
+     "mii": mii_url},
+     
+    {"name": "King William III", "score": 75, "mmr_change": 0, "new_mmr": 1000, 
+     "mii": mii_url}
+    ]
+    
     subtitle = "Event A 12-12-1234"
     img = generator.generate(results, subtitle)
     # img.show()  # Display the image

@@ -25,10 +25,26 @@
             "default": "#FFFFFF"
         }
     },
+
+    "direction_icons": {
+        "up": "https://drive.google.com/uc?export=view&id=1VSLhrbptVHTpHNKPStGC3h6eAmHWKpOA",
+        "down": "https://drive.google.com/uc?export=view&id=1q2_8BYMCGQc8h_rrzQ7X_IvNpmbijWbN",
+        "neutral": "https://drive.google.com/uc?export=view&id=1WWfij16PmM-jeB-fQRNQqBaaiNzmYRzp"
+    },
     
-    "asset_dirs": {
-        "miis": "mii_pics",
-        "ranks": "rank_icons"
+    "rank_icons": {
+        "tin": "https://drive.google.com/uc?export=view&id=1JhlsOv85rNyeHMSsMV9y6bDEdUhHpMxP",
+        "bronze": "https://drive.google.com/uc?export=view&id=1jUy8pxfVhcQzVCJE1KJmcn044-JeUZ-g",
+        "silver": "https://drive.google.com/uc?export=view&id=1uVdQzNVA80OKFGXrlNg4NQJJ06gw7Kxo",
+        "gold": "https://drive.google.com/uc?export=view&id=153V1Xt8nrIThy31n2Pt0pvX-xm7jk_KC",
+        "emerald": "https://drive.google.com/uc?export=view&id=1OGLVD3jgtdZX3fcmIK4_hsqOPzpFMl_T",
+        "sapphire": "https://drive.google.com/uc?export=view&id=1sBaoQmSLzxCgRiWOL0RNX81YgVDbn0Yj",
+        "ruby": "https://drive.google.com/uc?export=view&id=1LyWp-_7w1aii-REI3R4sJJgTTe8kwNlz",
+        "duke": "https://drive.google.com/uc?export=view&id=1tLcMjOOszY0Ka4wu_D11ipSMyGHveRGx",
+        "master": "https://drive.google.com/uc?export=view&id=1VqqYU9HUjPFLH-MmQhZA7QEZJPVNASpu",
+        "grandmaster": "https://drive.google.com/uc?export=view&id=1Spp97GoX17zxgjmzjG8rGlLhfimRQnaS",
+        "monarch": "https://drive.google.com/uc?export=view&id=1ugb2kEmF7T5-Gh0JX5nYQWBBI4-7zJrO",
+        "sovereign": "https://drive.google.com/uc?export=view&id=1SUMOUdHORC2Q0zAFUE0Q9XmndQEZBIzX"
     },
     
     "formats": {
