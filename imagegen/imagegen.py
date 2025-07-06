@@ -2,6 +2,20 @@ import json
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageColor
 
+# MMR Ranges
+# Tin: 0-1999
+# Bronze: 2000-2999
+# Silver: 3000-3999
+# Gold: 4000-4999
+# Emerald: 5000-5999
+# Sapphire: 6000-6999
+# Ruby: 7000-7999
+# Duke: 8000-8999
+# Master: 9000-9999
+# Grandmaster: 10000-10999
+# Monarch: 11000-14999
+# Sovereign: 15000+
+
 class TournamentImageGenerator:
     def __init__(self, format_type):
         """
@@ -167,6 +181,41 @@ class TournamentImageGenerator:
                 # Draw the Mii
                 self._draw_mii(img, player_name, mii_x, member_y, mii_size)
 
+    def _determine_rank_from_mmr(self, mmr):
+        """
+        Determine the rank based on MMR value
+        
+        Args:
+            mmr: The MMR value
+            
+        Returns:
+            string: The rank name (lowercase for file lookup purposes)
+        """
+        if mmr < 2000:
+            return "tin"
+        elif mmr < 3000:
+            return "bronze"
+        elif mmr < 4000:
+            return "silver"
+        elif mmr < 5000:
+            return "gold"
+        elif mmr < 6000:
+            return "emerald"
+        elif mmr < 7000:
+            return "sapphire"
+        elif mmr < 8000:
+            return "ruby"
+        elif mmr < 9000:
+            return "duke"
+        elif mmr < 10000:
+            return "master"
+        elif mmr < 11000:
+            return "grandmaster"
+        elif mmr < 15000:
+            return "monarch"
+        else:
+            return "sovereign"
+
     def _draw_player_score_line(self, img, player_data, center_x, stats_y, stats_size, horizontal_spacing):
         """
         Draw the complete player score line with all stats and icons
@@ -188,8 +237,19 @@ class TournamentImageGenerator:
         player_score = player_data["score"]
         mmr_change = player_data["mmr_change"]
         new_mmr = player_data["new_mmr"]
-        rank = player_data["rank"]
-        rank_change = player_data["rank_change"]
+        
+        # Determine rank based on MMR
+        rank = self._determine_rank_from_mmr(new_mmr)
+        
+        # Determine rank change by comparing new rank with old rank
+        old_mmr = new_mmr - mmr_change
+        old_rank = self._determine_rank_from_mmr(old_mmr)
+        
+        # Determine rank change direction
+        if rank == old_rank:
+            rank_change = 0
+        else:
+            rank_change = 1 if new_mmr > old_mmr else -1
         
         # Create stats text
         stats_font = ImageFont.truetype(self.font_file, stats_size)
@@ -717,18 +777,20 @@ class TournamentImageGenerator:
 
 if __name__ == "__main__":
     # Example usage
-    generator = TournamentImageGenerator("5v5")
+    generator = TournamentImageGenerator("6v6")
     results = [
-    {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 2185, "rank": "Duke", "rank_change": +1},
-    {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 2072, "rank": "Gold", "rank_change": 0},
-    {"name": "KogMawMain", "score": 168, "mmr_change": +25, "new_mmr": 1968, "rank": "Silver", "rank_change": -1},
-    {"name": "Gaberboo", "score": 155, "mmr_change": +22, "new_mmr": 1855, "rank": "Silver", "rank_change": +1},
-    {"name": "TealS", "score": 142, "mmr_change": +18, "new_mmr": 1742, "rank": "Silver", "rank_change": +1},
-    {"name": "Fern", "score": 135, "mmr_change": +15, "new_mmr": 1635, "rank": "Bronze", "rank_change": +1},
-    {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528, "rank": "Bronze", "rank_change": +1},
-    {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418, "rank": "Bronze", "rank_change": +1},
-    {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305, "rank": "Duke", "rank_change": +1},
-    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, "rank": "Tin", "rank_change": +1}
+    {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 2185},
+    {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 2072},
+    {"name": "KogMawMain", "score": 168, "mmr_change": +25, "new_mmr": 1968},
+    {"name": "Gaberboo", "score": 155, "mmr_change": +22, "new_mmr": 1855},
+    {"name": "TealS", "score": 142, "mmr_change": +18, "new_mmr": 1742},
+    {"name": "Fern", "score": 135, "mmr_change": +15, "new_mmr": 1635},
+    {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528},
+    {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418},
+    {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305},
+    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195},
+    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085},
+    {"name": "King William III", "score": 75, "mmr_change": 0, "new_mmr": 1000}
 ]
     subtitle = "Event A 12-12-1234"
     img = generator.generate(results, subtitle)
