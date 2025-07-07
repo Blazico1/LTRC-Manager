@@ -164,16 +164,40 @@ class LTRC_manager():
     def calculate_placement(self):
         '''
         This method assumes the MMR of unplaced racers and calculates their placements
+        Using a single API call to read the complete Placements worksheet
         '''
         num = len(self.racers)
         MMRs = self.MMRs
         self.LR_list = []
         self.is_placed = []
         self.placement_updates = []
-        self.completion= []
+        self.completion = []
 
         averages = [] #debug list
-    
+        
+        # Get all placement data at once in a single API call
+        # Get all rows starting from row 5 (where data begins)
+        # Columns: 1=Name, 2=Completion, 4,5,6=Points, 8=MMR Accumulation
+        placements_data = self.Placements.get_all_values()[4:]  # Skip header rows
+        
+        # Create a dictionary for quick lookups
+        placements_dict = {}
+        for row_idx, row in enumerate(placements_data, start=5):  # Start index at 5 (actual row number)
+            if row and len(row) > 0 and row[0]:  # Name is in column 1 (index 0)
+                placements_dict[row[0]] = {
+                    'row': row_idx,
+                    'completion': row[1] if len(row) > 1 else None,
+                    'point1': row[3] if len(row) > 3 and row[3] else None,
+                    'point2': row[4] if len(row) > 4 and row[4] else None,
+                    'point3': row[5] if len(row) > 5 and row[5] else None,
+                    'mmr_accum': row[7] if len(row) > 7 and row[7] else "0"
+                }
+
+        # Find the first empty row
+        empty_row = 5
+        while empty_row < len(placements_data) + 5 and placements_data[empty_row - 5] and placements_data[empty_row - 5][0]:
+            empty_row += 1
+        
         for i in range(num):
             # If the MMR is unknown
             if MMRs[i] == "???" or MMRs[i] == "":
@@ -183,27 +207,14 @@ class LTRC_manager():
                 points = [self.scores[i]]
                 if self.flag_32track:
                     points[0] /= 2.67
-    
-                # Look for the racer in the placements
-                location = self.Placements.find(racer)
-    
-                if location is None:
-                    # Player has no prior placements
-                    # Find the first empty row after the placed racers
-                    j = 5
-                    while self.Placements.cell(j,1).value is not None :
-                        j += 1
-    
-                    row = j
-                    self.completion.append("1/3")
-                    self.placement_updates.append((row, 1, racer))
-                    self.placement_updates.append((row, 2, "1/3"))
-                    self.placement_updates.append((row, 4, points[0]))
-    
-                else:
-                    row = location.row
-                    completion = self.Placements.cell(row, 2).value
-                    if completion is None:
+
+                # Check if player exists in placements
+                if racer in placements_dict:
+                    # Player exists in placements
+                    row = placements_dict[racer]['row']
+                    completion = placements_dict[racer]['completion']
+                    
+                    if not completion:
                         self.completion.append("1/3")
                         self.placement_updates.append((row, 2, "1/3"))
                         self.placement_updates.append((row, 4, points[0]))
@@ -212,9 +223,10 @@ class LTRC_manager():
                         self.completion.append("2/3")
                         self.placement_updates.append((row, 2, "2/3"))
                         self.placement_updates.append((row, 5, points[0]))
-    
+
                         # Get the points of the previous event
-                        points.append(int(self.Placements.cell(row,4).value))
+                        if placements_dict[racer]['point1']:
+                            points.append(float(placements_dict[racer]['point1']))
                     
                     elif completion == "2/3":
                         self.completion.append("3/3")
@@ -223,11 +235,22 @@ class LTRC_manager():
 
                         self.placement_updates.append((row, 2, "3/3"))
                         self.placement_updates.append((row, 6, points[0]))
-    
+
                         # Get the points of the previous events
-                        points.append(int(self.Placements.cell(row,4).value))
-                        points.append(int(self.Placements.cell(row,5).value))
-    
+                        if placements_dict[racer]['point1']:
+                            points.append(float(placements_dict[racer]['point1']))
+                        if placements_dict[racer]['point2']:
+                            points.append(float(placements_dict[racer]['point2']))
+                else:
+                    # Player doesn't exist in placements, add them
+                    row = empty_row
+                    empty_row += 1  # Increment for next new player
+                    
+                    self.completion.append("1/3")
+                    self.placement_updates.append((row, 1, racer))
+                    self.placement_updates.append((row, 2, "1/3"))
+                    self.placement_updates.append((row, 4, points[0]))
+
                 # Calculate the average number of points in the past event(s)
                 average = np.average(points)
                 averages.append(average) #debug list
@@ -240,9 +263,8 @@ class LTRC_manager():
                 else:
                     MMR = 7750
 
-                if completion == "2/3":
+                if racer in placements_dict and placements_dict[racer]['completion'] == "2/3":
                     # MMR is average with previous season MMR
-
                     # Get the previous season MMR
                     row_playerdata = self.Playerdata.find(racer).row
                     previous_season_MMR = self.Playerdata.cell(row_playerdata, 11).value
@@ -250,10 +272,11 @@ class LTRC_manager():
                     if previous_season_MMR is not None and previous_season_MMR != "???":
                         previous_season_MMR = int(previous_season_MMR)
                         MMR = (MMR + previous_season_MMR) / 2
-    
+
                 # Add previously gained MMR to the new MMR
-                temp = self.Placements.cell(row,8).value
-                MMR += int(temp) if temp is not None else 0
+                if racer in placements_dict and placements_dict[racer]['mmr_accum']:
+                    MMR += int(placements_dict[racer]['mmr_accum'])
+                
                 self.LR_list.append(MMR)
             else:
                 self.is_placed.append(True)
@@ -268,7 +291,7 @@ class LTRC_manager():
         '''
         cell_list = []
         for row, column, value in self.placement_updates:
-            cell_list.append(gspread.models.Cell(row, column, value))
+            cell_list.append(gspread.cell.Cell(row, column, value))
         self.Placements.update_cells(cell_list)
 
     def find_ranking(self):
