@@ -68,107 +68,58 @@ class LTRC_manager():
 
     def get_all(self):
         '''
-        This method reads all the required data from the spreadsheet
+        This method reads all the required data from the spreadsheet using a single API call
         '''
-        
-        self.get_racers()
-        self.get_scores()
-        self.get_MMRs()
+        # Define range based on the mode
+        match self.mode:
+            case "FFA":
+                range_str = "B3:E14"
+            case "2vs2":
+                range_str = "B23:E39"
+            case "3vs3":
+                range_str = "B48:E62"
+            case "4vs4":
+                range_str = "B71:E84"
+            case "5vs5":
+                range_str = "B92:E104"
+            case "6vs6":
+                range_str = "B92:E104"
 
+        # Get all data in a single API call
+        data = self.TR_Tables.get(range_str)
+        
+        # Process the data
+        self.racers = []
+        self.scores = []
+        self.MMRs = []
+        
+        for row in data:
+            # Only process rows with data
+            if row and len(row) >= 2 and row[0] != '':
+                self.racers.append(row[0])
+                # Convert scores to integers
+                self.scores.append(int(row[1]))
+                # Get MMR from column E (index 3)
+                if len(row) > 3:
+                    self.MMRs.append(row[3])
+                else:
+                    self.MMRs.append("???")
+
+        if len(self.racers) == 0:
+            raise ValueError("No racers found in the sheet")
+        
         if len(self.racers) != len(self.scores) or len(self.racers) != len(self.MMRs):
             raise ValueError("The number of racers, scores and MMRs do not match")
         
+        # Add any new players to the sheets
+        self.handle_new_players()
+        
+        # Calculate placements for unplaced players
         self.calculate_placement()
 
         # Calculate the average MMR of the room
         self.average_room_MMR = np.average(self.LR_list) 
 
-    def get_racers(self):
-        '''
-        This method returns the order of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                racers = self.TR_Tables.get("B3:B14")
-                self.racers = [value for sublist in racers for value in sublist]
-            case "2vs2":
-                racers = self.TR_Tables.get("B23:B39")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "3vs3":
-                racers = self.TR_Tables.get("B48:B62")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "4vs4":
-                racers = self.TR_Tables.get("B71:B84")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "5vs5":
-                racers = self.TR_Tables.get("B92:B104")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "6vs6":
-                racers = self.TR_Tables.get("B92:B104")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-
-        if len(self.racers) == 0:
-            raise ValueError("No racers found in the sheet") 
-        
-        self.handle_new_players()
-
-    def get_scores(self):
-        '''
-        This method returns the scores of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                scores = self.TR_Tables.get("C3:C14")
-                self.scores = [int(value) for sublist in scores for value in sublist]
-            case "2vs2":
-                scores = self.TR_Tables.get("C23:C39")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "3vs3":
-                scores = self.TR_Tables.get("C48:C62")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "4vs4":
-                scores = self.TR_Tables.get("C71:C84")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "5vs5":
-                scores = self.TR_Tables.get("C92:C104")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "6vs6":
-                scores = self.TR_Tables.get("C92:C104")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-
-        if len(self.scores) == 0:
-            raise ValueError("No scores found in the sheet")
-
-    def get_MMRs(self):
-        '''
-        This method returns the MMRs of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                MMRs = self.TR_Tables.get("E3:E14")
-                self.MMRs = [value for sublist in MMRs for value in sublist]
-            case "2vs2":
-                MMRs = self.TR_Tables.get("E23:E39")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "3vs3":
-                MMRs = self.TR_Tables.get("E48:E62")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "4vs4":
-                MMRs = self.TR_Tables.get("E71:E84")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "5vs5":
-                MMRs = self.TR_Tables.get("E92:E104")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "6vs6":
-                MMRs = self.TR_Tables.get("E92:E104")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-
-        if len(self.MMRs) == 0:
-            raise ValueError("No MMRs found in the sheet")
-    
     def handle_new_players(self):
         '''
         This method checks for new players and adds them to both Playerdata and Placements tabs
@@ -647,7 +598,7 @@ class LTRC_manager():
         
         # Use batch_clear to clear all ranges in a single API call
         if ranges:
-            self.TR_Tables.batch_clear([f"{self.TR_Tables.title}!{r}" for r in ranges])
+            self.TR_Tables.batch_clear(ranges)
 
     def LTRC_routine(self):
         self.get_all()
@@ -738,4 +689,3 @@ class LTRC_manager():
             results.append(player)
         
         return results
-    
