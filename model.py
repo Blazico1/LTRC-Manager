@@ -2,10 +2,13 @@ from MMR import LTRC_manager
 from imagegen import LTRCImageGenerator
 import os
 from datetime import datetime
+from PIL import Image
+from io import BytesIO
 
 class LTRCModel:
     def __init__(self):
         self.LTRC = LTRC_manager()
+        self.generated_image = None
 
     def set_mode(self, mode):
         self.LTRC.mode = mode
@@ -44,25 +47,47 @@ class LTRCModel:
             progress_callback: Function to call with progress updates
             
         Returns:
-            str: Path to the saved image
+            PIL.Image: The generated image
         """
         # Create the image generator with the current format
         generator = LTRCImageGenerator(self.LTRC.mode, progress_callback)
         
         # Get the player results from LTRC
         results = self.LTRC.get_results()
-        print(results)
-        # Generate the image
-        img = generator.generate(results, subtitle)
         
+        # Generate the image
+        self.generated_image = generator.generate(results, subtitle)
+        
+        # Return the image object
+        return self.generated_image
+    
+    def save_image_to_file(self, filename=None):
+        """
+        Save the generated image to a file if needed
+        
+        Args:
+            filename: Optional custom filename, otherwise auto-generated
+            
+        Returns:
+            str: Path to the saved image or None if no image was generated
+        """
+        if self.generated_image is None:
+            return None
+            
         # Create an 'images' directory if it doesn't exist
         os.makedirs('images', exist_ok=True)
         
-        # Save the image with a timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"tournament_{self.LTRC.mode}_{timestamp}.png"
+        # Generate filename if not provided
+        if filename is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"tournament_{self.LTRC.mode}_{timestamp}.png"
+        
+        # Ensure filename has .png extension
+        if not filename.lower().endswith('.png'):
+            filename += '.png'
+            
         filepath = os.path.join('images', filename)
-        img.save(filepath)
+        self.generated_image.save(filepath)
         
         # Return the full path to the saved image
         return os.path.abspath(filepath)

@@ -149,7 +149,7 @@ class LTRCView(QMainWindow):
         # Add buttons
         self.skip_button = QPushButton("Skip Image Generation", self)
         self.generate_button = QPushButton("Generate Image", self)
-        self.discord_button = QPushButton("Generate & Upload to Discord", self)
+        self.discord_button = QPushButton("Generate and upload to Discord", self)
 
         # Add buttons to layout
         button_layout = QHBoxLayout()
@@ -199,10 +199,7 @@ class LTRCView(QMainWindow):
         self.layout = QVBoxLayout(self.widget)
         
         # Check if an image has been generated using the flag
-        if self.image_generated and self.image_path and os.path.exists(self.image_path):
-            # Load the image
-            self.original_pixmap = QPixmap(self.image_path)
-            
+        if self.image_generated and hasattr(self, 'original_pixmap') and not self.original_pixmap.isNull():
             # Create an image display area
             self.image_label = QLabel(self)
             self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -219,10 +216,18 @@ class LTRCView(QMainWindow):
             # Connect resize event to image scaling function
             self.resizeEvent = self.on_resize
             
-            # Add a label with the image path
-            self.path_label = QLabel(f"Image saved to: {self.image_path}")
-            self.path_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.layout.addWidget(self.path_label)
+            # Add image action buttons
+            button_layout = QHBoxLayout()
+            
+            # Add "Copy to Clipboard" button
+            self.copy_button = QPushButton("Copy Image to Clipboard", self)
+            button_layout.addWidget(self.copy_button)
+            
+            # Add "Save Image" button
+            self.save_button = QPushButton("Save Image", self)
+            button_layout.addWidget(self.save_button)
+            
+            self.layout.addLayout(button_layout)
             
             # Add label asking if the user wants to write MMR values
             self.final_text = QLabel("\nWrite new MMR values to the sheet?", self)
@@ -298,12 +303,6 @@ class LTRCView(QMainWindow):
         self.text = QLabel("Sheet updated successfully! Do you want to run the program again?", self)
         self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(self.text)
-
-        # Add image success message if applicable
-        if hasattr(self, 'image_path'):
-            self.image_text = QLabel(f"Image saved to: {self.image_path}", self)
-            self.image_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.layout.addWidget(self.image_text)
 
         # Create buttons
         self.restart_button = QPushButton("Restart", self)

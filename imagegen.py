@@ -834,7 +834,7 @@ class LTRCImageGenerator:
         # Load assets one by one (can be parallelized later if needed)
         for url in urls_to_load:
             self._load_image_from_url(url)
-            self._update_progress(1, f"Preloaded asset: {url[:30]}...")
+            self._update_progress(1, f"Preloaded asset: {url}")
             
         elapsed_time = time.time() - start_time
         print(f"Preloaded {len(urls_to_load)} assets in {elapsed_time:.2f} seconds")
