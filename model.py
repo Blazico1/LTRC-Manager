@@ -1,4 +1,7 @@
 from MMR import LTRC_manager
+from imagegen import TournamentImageGenerator
+import os
+from datetime import datetime
 
 class LTRCModel:
     def __init__(self):
@@ -31,3 +34,35 @@ class LTRCModel:
         self.LTRC.update_placements_MMR()
         self.LTRC.update_sheet()
         self.LTRC.clear_table()
+        
+    def generate_image(self, subtitle, progress_callback=None):
+        """
+        Generate an image with the tournament results
+        
+        Args:
+            subtitle: Text to display as subtitle
+            progress_callback: Function to call with progress updates
+            
+        Returns:
+            str: Path to the saved image
+        """
+        # Create the image generator with the current format
+        generator = TournamentImageGenerator(self.LTRC.mode, progress_callback)
+        
+        # Get the player results from LTRC
+        results = self.LTRC.get_results()
+        print(results)
+        # Generate the image
+        img = generator.generate(results, subtitle)
+        
+        # Create an 'images' directory if it doesn't exist
+        os.makedirs('images', exist_ok=True)
+        
+        # Save the image with a timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"tournament_{self.LTRC.mode}_{timestamp}.png"
+        filepath = os.path.join('images', filename)
+        img.save(filepath)
+        
+        # Return the full path to the saved image
+        return os.path.abspath(filepath)

@@ -1,5 +1,9 @@
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QPushButton, QComboBox, QCheckBox, QWidget, QTableWidget, QTableWidgetItem, QHBoxLayout, QLabel, QHeaderView
+from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QPushButton, QComboBox, QCheckBox, 
+                            QWidget, QTableWidget, QTableWidgetItem, QHBoxLayout, QLabel, 
+                            QHeaderView, QLineEdit, QProgressBar, QScrollArea)
 from PyQt6.QtCore import Qt, QCoreApplication
+from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
+import os
 
 class LTRCView(QMainWindow):
     def __init__(self):
@@ -15,6 +19,10 @@ class LTRCView(QMainWindow):
         self.dropdown = QComboBox()
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
         self.checkbox = QCheckBox("32 track")
+        
+        # Initialize the image generation flag
+        self.image_generated = False
+        self.image_path = None
 
         self.layout.addWidget(self.dropdown)
         self.layout.addWidget(self.checkbox)
@@ -35,6 +43,10 @@ class LTRCView(QMainWindow):
         self.dropdown = QComboBox()
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
         self.checkbox = QCheckBox("32 track")
+        
+        # Reset the image generation flag and path
+        self.image_generated = False
+        self.image_path = None
 
         self.layout.addWidget(self.dropdown)
         self.layout.addWidget(self.checkbox)
@@ -103,14 +115,123 @@ class LTRCView(QMainWindow):
         # Set the widget as the central widget
         self.setCentralWidget(self.widget)
      
+    def show_image_gen_screen(self):
+        # Create a widget to hold the text, input field, and buttons
+        self.widget = QWidget(self)
+        self.layout = QVBoxLayout(self.widget)
+
+        # Create the header text
+        self.header_text = QLabel("Image Generation", self)
+        self.header_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.header_text)
+
+        # Create subtitle input field
+        subtitle_layout = QHBoxLayout()
+        subtitle_label = QLabel("Subtitle for image:", self)
+        self.subtitle_input = QLineEdit(self)
+        self.subtitle_input.setPlaceholderText("Enter event name or description")
+        subtitle_layout.addWidget(subtitle_label)
+        subtitle_layout.addWidget(self.subtitle_input)
+        self.layout.addLayout(subtitle_layout)
+
+        # Add some spacing
+        self.layout.addSpacing(20)
+
+        # Create explanatory text
+        self.image_info_text = QLabel(
+            "You can generate an image with the tournament results.\n"
+            "The subtitle will be displayed below the title on the image.", 
+            self
+        )
+        self.image_info_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.image_info_text)
+
+        # Add buttons
+        self.skip_button = QPushButton("Skip Image Generation", self)
+        self.generate_button = QPushButton("Generate Image", self)
+        self.discord_button = QPushButton("Generate & Upload to Discord", self)
+
+        # Add buttons to layout
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.skip_button)
+        button_layout.addWidget(self.generate_button)
+        button_layout.addWidget(self.discord_button)
+        self.layout.addLayout(button_layout)
+
+        # Set the widget as the central widget
+        self.setCentralWidget(self.widget)
+
+    def show_image_progress_screen(self):
+        # Create a widget to hold the progress bar and status text
+        self.widget = QWidget(self)
+        self.layout = QVBoxLayout(self.widget)
+
+        # Create the header text
+        self.header_text = QLabel("Generating Image...", self)
+        self.header_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.header_text)
+
+        # Create progress bar
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.layout.addWidget(self.progress_bar)
+
+        # Create status text
+        self.status_text = QLabel("Starting image generation...", self)
+        self.status_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.status_text)
+
+        # Set the widget as the central widget
+        self.setCentralWidget(self.widget)
+
+    def update_progress(self, value, message=None):
+        """Update the progress bar and status message"""
+        if hasattr(self, 'progress_bar'):
+            self.progress_bar.setValue(value)
+            
+        if hasattr(self, 'status_text') and message:
+            self.status_text.setText(message)
+     
     def show_write_screen(self):
         # Create a widget to hold the text and button
         self.widget = QWidget(self)
         self.layout = QVBoxLayout(self.widget)
-
-        # Create the text
-        self.final_text = QLabel(f"Make the table screenshot before continuing!\n\nWrite new MMR values to the sheet?", self)
-        self.layout.addWidget(self.final_text)
+        
+        # Check if an image has been generated using the flag
+        if self.image_generated and self.image_path and os.path.exists(self.image_path):
+            # Load the image
+            self.original_pixmap = QPixmap(self.image_path)
+            
+            # Create an image display area
+            self.image_label = QLabel(self)
+            self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            # Create a scroll area for the image
+            self.scroll_area = QScrollArea()
+            self.scroll_area.setWidget(self.image_label)
+            self.scroll_area.setWidgetResizable(True)
+            self.layout.addWidget(self.scroll_area)
+            
+            # Scale the image initially
+            self.scale_image()
+            
+            # Connect resize event to image scaling function
+            self.resizeEvent = self.on_resize
+            
+            # Add a label with the image path
+            self.path_label = QLabel(f"Image saved to: {self.image_path}")
+            self.path_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.layout.addWidget(self.path_label)
+            
+            # Add label asking if the user wants to write MMR values
+            self.final_text = QLabel("\nWrite new MMR values to the sheet?", self)
+            self.final_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.layout.addWidget(self.final_text)
+        else:
+            # Create the text for screenshot reminder
+            self.final_text = QLabel("Make the table screenshot before continuing!\n\nWrite new MMR values to the sheet?", self)
+            self.layout.addWidget(self.final_text)
 
         # Create the "Close" button
         self.close_button = QPushButton("Close", self)
@@ -127,6 +248,33 @@ class LTRCView(QMainWindow):
 
         # Set the widget as the central widget
         self.setCentralWidget(self.widget)
+    
+    def scale_image(self):
+        """Scale the image to fit the current window size while maintaining aspect ratio"""
+        if hasattr(self, 'original_pixmap') and hasattr(self, 'image_label') and hasattr(self, 'scroll_area'):
+            # Get the available size in the scroll area
+            available_width = self.scroll_area.width() - 20  # Subtract some padding
+            available_height = self.scroll_area.height() - 20  # Subtract some padding
+            
+            # Scale the pixmap to fit within the available space while preserving aspect ratio
+            scaled_pixmap = self.original_pixmap.scaled(
+                available_width, 
+                available_height,
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
+            )
+            
+            # Update the image label with the scaled pixmap
+            self.image_label.setPixmap(scaled_pixmap)
+
+    def on_resize(self, event: QResizeEvent):
+        """Handle window resize events"""
+        # Scale the image when the window is resized
+        if hasattr(self, 'original_pixmap'):
+            self.scale_image()
+        
+        # Call the parent class's resizeEvent
+        super().resizeEvent(event)
 
     def show_write_loading(self):
         # Create a widget to hold the text
@@ -150,6 +298,12 @@ class LTRCView(QMainWindow):
         self.text = QLabel("Sheet updated successfully! Do you want to run the program again?", self)
         self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(self.text)
+
+        # Add image success message if applicable
+        if hasattr(self, 'image_path'):
+            self.image_text = QLabel(f"Image saved to: {self.image_path}", self)
+            self.image_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.layout.addWidget(self.image_text)
 
         # Create buttons
         self.restart_button = QPushButton("Restart", self)

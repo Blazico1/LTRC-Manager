@@ -1,4 +1,5 @@
 import gspread
+from gspread.utils import ValueRenderOption
 import numpy as np
 from google.oauth2.service_account import Credentials
 from settings import load_settings
@@ -61,14 +62,6 @@ class LTRC_manager():
 
         # Get the mode from the spreadsheet
         self.mode = self.Table_stuff.get("C1")[0][0] 
-
-        # # Account for possible 6vs6 mode (12 players)
-        # if self.mode == "5vs5":
-        #     cell1 = self.TR_Tables.get("C97")[0][0]
-        #     cell2 = self.TR_Tables.get("C105")[0][0]
-        #     # If the cells are not empty, the mode is 6vs6
-        #     if cell1 != "" and cell2 != "":
-        #         self.mode = "6vs6"
             
         # Toggle flag for 32 track mode
         self.flag_32track = False
@@ -627,67 +620,122 @@ class LTRC_manager():
 
     def clear_table(self):
         '''
-        This method clears the TR tables
+        This method clears the TR tables using batch_clear to reduce API calls
         '''
-
-        # Clear the Player, Score and Change columns
-
+        # Define ranges to clear based on the mode
+        ranges = []
+        
         match self.mode:
             case "FFA":
-                self.TR_Tables.update("B3:B14", [[""] for _ in range(12)])
-                self.TR_Tables.update("C3:C14", [[""] for _ in range(12)])
-                self.TR_Tables.update("F3:F14", [[""] for _ in range(12)])
+                ranges = ["B3:B14", "C3:C14", "F3:F14", "I3:I14"]
                 self.TR_Tables.update("H3:H14", [["-"] for _ in range(12)])
-                self.TR_Tables.update("I3:I14", [[""] for _ in range(12)])
             case "2vs2":
-                self.TR_Tables.update("B23:B39", [[""] for _ in range(17)])
-                self.TR_Tables.update("C23:C39", [[""] for _ in range(17)])
-                self.TR_Tables.update("F23:F39", [[""] for _ in range(17)])
+                ranges = ["B23:B39", "C23:C39", "F23:F39", "I23:I39"]
                 self.TR_Tables.update("H23:H39", [["-"] for _ in range(17)])
-                self.TR_Tables.update("I23:I39", [[""] for _ in range(17)])
             case "3vs3":
-                self.TR_Tables.update("B48:B62", [[""] for _ in range(15)])
-                self.TR_Tables.update("C48:C62", [[""] for _ in range(15)])
-                self.TR_Tables.update("F48:F62", [[""] for _ in range(15)])
+                ranges = ["B48:B62", "C48:C62", "F48:F62", "I48:I62"]
                 self.TR_Tables.update("H48:H62", [["-"] for _ in range(15)])
-                self.TR_Tables.update("I48:I62", [[""] for _ in range(15)])
             case "4vs4":
-                self.TR_Tables.update("B71:B84", [[""] for _ in range(14)])
-                self.TR_Tables.update("C71:C84", [[""] for _ in range(14)])
-                self.TR_Tables.update("F71:F84", [[""] for _ in range(14)])
+                ranges = ["B71:B84", "C71:C84", "F71:F84", "I71:I84"]
                 self.TR_Tables.update("H71:H84", [["-"] for _ in range(14)])
-                self.TR_Tables.update("I71:I84", [[""] for _ in range(14)])
             case "5vs5":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                ranges = ["B92:B104", "C92:C104", "F92:F104", "I92:I104"]
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(13)])
             case "6vs6":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                ranges = ["B92:B104", "C92:C104", "F92:F104", "I92:I104"]
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(113)])
+        
+        # Use batch_clear to clear all ranges in a single API call
+        if ranges:
+            self.TR_Tables.batch_clear([f"{self.TR_Tables.title}!{r}" for r in ranges])
 
     def LTRC_routine(self):
         self.get_all()
         self.find_ranking()
         self.find_k_values()
         self.calc_new_MMR()
+
+    def get_mii(self, player):
+        """
+        Get the Mii image URL for a player
         
-if __name__ == "__main__":
-    # LTRC = LTRC_manager()
-    # LTRC.LTRC_routine()
+        Args:
+            player: Player name to look up
+            
+        Returns:
+            str: URL to the player's Mii image or default Mii if not found
+        """
+        # Find the player in the sheet and get their Mii
+        cell = self.Playerdata.find(player)
+        if cell and (mii := self.Playerdata.cell(cell.row, 5, value_render_option=ValueRenderOption.formula).value):
+            formula = mii
+        else:
+            # Use default Mii if player not found or no Mii set
+            formula = self.Playerdata.acell("V29").value
+            
+        # Extract URL from formula
+        if formula and 'IMAGE' in formula:
+            start = formula.find('"')
+            end = formula.rfind('"')
+            if start != -1 and end != -1 and start < end:
+                return formula[start+1:end]
 
-    # LTRC.fill_MMR_change_table()
-    # LTRC.update_placements_MMR()
-    # # LTRC.update_sheet()
 
-    # print(f"Mode: {LTRC.mode}")
-    # print(f"Racers: {LTRC.racers}")
-    # print(f"Old MMRs: {LTRC.LR_list}")
-    # print(f"Change in MMR: {LTRC.delta_MMRs}")
-    # # print(f"New MMRs: {LTRC.MMR_new}")
-
-    print("Don't run this script you big dummy!")
+    def get_results(self):
+        """
+        Gathers all the relevant data and returns a list of dictionaries with player information.
+        Each dictionary contains: name, score, mmr_change, new_mmr, mii
+        Only fetches Mii images for the winning team to reduce API calls.
+        """
+        # Make sure all the necessary calculations have been performed
+        if not hasattr(self, 'racers') or not hasattr(self, 'scores') or not hasattr(self, 'delta_MMRs') or not hasattr(self, 'MMR_new'):
+            raise ValueError("Data not fully initialized.")
+            
+        results = []
+        
+        # Determine team size based on the mode
+        
+        if self.mode == "FFA":
+            team_size = 1
+        elif self.mode == "2vs2":
+            team_size = 2
+        elif self.mode == "3vs3":
+            team_size = 3
+        elif self.mode == "4vs4":
+            team_size = 4
+        elif self.mode == "5vs5":
+            team_size = 5
+        elif self.mode == "6vs6":
+            team_size = 6
+            
+        # Calculate the number of Miis to fetch (just for the winning team)
+        miis_to_fetch = team_size
+        
+        for i, name in enumerate(self.racers):
+            # Get the score
+            score = self.scores[i]
+            
+            # Get the MMR change
+            mmr_change = self.delta_MMRs[i]
+            
+            # Get the new MMR
+            new_mmr = int(self.MMR_new[i])
+            
+            # Only fetch Mii URLs for the winning team to reduce API calls
+            mii_url = None
+            if i < miis_to_fetch:
+                mii_url = self.get_mii(name)
+            
+            # Create the player dictionary with all information
+            player = {
+                "name": name,
+                "score": score,
+                "mmr_change": mmr_change,
+                "new_mmr": new_mmr,
+                "mii": mii_url
+            }
+            
+            results.append(player)
+        
+        return results
+    

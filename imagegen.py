@@ -843,8 +843,8 @@ class TournamentImageGenerator:
         # Prefetch all Mii images
         mii_urls = []
         for player in results:
-            if "mii" in player:
-                mii_urls.append(player["mii"])
+            if player["mii"] is not None:
+                mii_urls.append(player["mii"]) 
                 
         if mii_urls:
             print(f"Prefetching {len(mii_urls)} Mii images...")
@@ -916,7 +916,7 @@ if __name__ == "__main__":
     generator = TournamentImageGenerator("6v6", progress_callback=print_progress)
     
     # Sample Mii URL
-    mii_url = "https://drive.google.com/uc?export=view&id=1s0syKxjMrYl3PP3pLxYrsppR3IsAznrY"
+    mii_url = None
     
     results = [
     {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 5000, 
