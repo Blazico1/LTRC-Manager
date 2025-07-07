@@ -31,7 +31,8 @@
     "direction_icons": {
         "up": "https://drive.google.com/uc?export=view&id=1VSLhrbptVHTpHNKPStGC3h6eAmHWKpOA",
         "down": "https://drive.google.com/uc?export=view&id=1q2_8BYMCGQc8h_rrzQ7X_IvNpmbijWbN",
-        "neutral": "https://drive.google.com/uc?export=view&id=1WWfij16PmM-jeB-fQRNQqBaaiNzmYRzp"
+        "neutral": "https://drive.google.com/uc?export=view&id=1WWfij16PmM-jeB-fQRNQqBaaiNzmYRzp",
+        "right": "https://drive.google.com/uc?export=view&id=16e6h1X0sSAL7X_eFQDQscxkNhAXYY13T"
     },
     
     "rank_icons": {
@@ -103,7 +104,7 @@
                 "name_size": 60,
                 "name_color": "#FFFFFF",
                 "stats_size": 35,
-                "row_spacing": 50,
+                "row_spacing": 25,
                 "horizontal_spacing": 15,
                 "vertical_spacing": 20,
                 "column_y_offset": 80,
@@ -111,7 +112,7 @@
             }
         },
         
-        "2v2": {
+        "2vs2": {
             "team_size": 2,
             "podium_count": 2,
             "header": {
@@ -172,7 +173,7 @@
             }
         },
         
-        "3v3": {
+        "3vs3": {
             "team_size": 3,
             "podium_count": 1,
             "header": {
@@ -233,7 +234,7 @@
             }
         },
         
-        "4v4": {
+        "4vs4": {
             "team_size": 4,
             "podium_count": 1,
             "header": {
@@ -294,8 +295,8 @@
             }
         },
         
-        "6v6": {
-            "team_size": 6,
+        "5vs5": {
+            "team_size": 5,
             "podium_count": 1,
             "header": {
                 "title_y": 0,
@@ -355,8 +356,8 @@
             }
         },
         
-        "5v5": {
-            "team_size": 5,
+        "6vs6": {
+            "team_size": 6,
             "podium_count": 1,
             "header": {
                 "title_y": 0,

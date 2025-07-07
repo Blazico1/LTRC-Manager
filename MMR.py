@@ -208,7 +208,7 @@ class LTRC_manager():
                         self.placement_updates.append((row, 2, "1/3"))
                         self.placement_updates.append((row, 4, points[0]))
                         
-                    if completion == "1/3":
+                    elif completion == "1/3":
                         self.completion.append("2/3")
                         self.placement_updates.append((row, 2, "2/3"))
                         self.placement_updates.append((row, 5, points[0]))
@@ -217,7 +217,7 @@ class LTRC_manager():
                         points.append(int(self.Placements.cell(row,4).value))
                     
                     elif completion == "2/3":
-                        self.completion.append("")
+                        self.completion.append("3/3")
                         # This event places the racer
                         self.is_placed[i] = True
 
@@ -384,7 +384,7 @@ class LTRC_manager():
             case "6vs6":
                 delta_MMRs = [sum(delta_MMRs[i:i+6])/6 for i in range(0, len(delta_MMRs), 6)]
                 self.delta_MMRs = [delta_MMRs[i//6] for i in range(len(delta_MMRs)*6)]
-        
+    
         # Modify MMR if 32 track mode is enabled
         if self.flag_32track:
             self.delta_MMRs = [delta_MMR * 2.67 if delta_MMR > 0 else delta_MMR * 0.67 for delta_MMR in self.delta_MMRs]
@@ -392,8 +392,11 @@ class LTRC_manager():
         # Round the MMR changes to the nearest integer
         self.delta_MMRs = [int(round(delta_MMR)) for delta_MMR in self.delta_MMRs]
 
-        # add the change in MMR to the old MMR
+        # Add the change in MMR to the old MMR
         self.MMR_new = np.add(self.LR_list, self.delta_MMRs)
+        
+        # Round the new MMR values to integers
+        self.MMR_new = [int(round(mmr)) for mmr in self.MMR_new]
 
     def fill_MMR_change_table(self):
         '''
@@ -622,7 +625,7 @@ class LTRC_manager():
             formula = mii
         else:
             # Use default Mii if player not found or no Mii set
-            formula = self.Playerdata.acell("V29").value
+            formula = self.Playerdata.acell("V29", value_render_option=ValueRenderOption.formula).value
             
         # Extract URL from formula
         if formula and 'IMAGE' in formula:
@@ -635,7 +638,7 @@ class LTRC_manager():
     def get_results(self):
         """
         Gathers all the relevant data and returns a list of dictionaries with player information.
-        Each dictionary contains: name, score, mmr_change, new_mmr, mii
+        Each dictionary contains: name, score, mmr_change, new_mmr, mii, completion
         Only fetches Mii images for the winning team to reduce API calls.
         """
         # Make sure all the necessary calculations have been performed
@@ -672,6 +675,9 @@ class LTRC_manager():
             # Get the new MMR
             new_mmr = int(self.MMR_new[i])
             
+            # Get placement completion status
+            completion = self.completion[i]
+            
             # Only fetch Mii URLs for the winning team to reduce API calls
             mii_url = None
             if i < miis_to_fetch:
@@ -683,7 +689,8 @@ class LTRC_manager():
                 "score": score,
                 "mmr_change": mmr_change,
                 "new_mmr": new_mmr,
-                "mii": mii_url
+                "mii": mii_url,
+                "completion": completion  # Add the completion status
             }
             
             results.append(player)

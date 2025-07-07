@@ -1,5 +1,5 @@
 from MMR import LTRC_manager
-from imagegen import TournamentImageGenerator
+from imagegen import LTRCImageGenerator
 import os
 from datetime import datetime
 
@@ -47,7 +47,7 @@ class LTRCModel:
             str: Path to the saved image
         """
         # Create the image generator with the current format
-        generator = TournamentImageGenerator(self.LTRC.mode, progress_callback)
+        generator = LTRCImageGenerator(self.LTRC.mode, progress_callback)
         
         # Get the player results from LTRC
         results = self.LTRC.get_results()

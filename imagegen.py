@@ -20,13 +20,13 @@ import threading
 # Monarch: 11000-14999
 # Sovereign: 15000+
 
-class TournamentImageGenerator:
+class LTRCImageGenerator:
     def __init__(self, format_type, progress_callback=None):
         """
         Initialize the tournament image generator with a specific format type.
         
         Args:
-            format_type: The format of the tournament (e.g., "FFA", "2v2")
+            format_type: The format of the tournament (e.g., "FFA", "2vs2")
             progress_callback: Optional callback function for progress updates
         """
         # Load configuration from the imagegen directory
@@ -245,7 +245,7 @@ class TournamentImageGenerator:
             player_idx = team_index * team_size + member_idx
             if player_idx < len(results):
                 player_data = results[player_idx]
-                mii_url = player_data.get("mii", player_data["name"])
+                mii_url = player_data["mii"]
                 
                 # Calculate vertical position for this Mii
                 member_y = mii_y_pos + (member_idx * (mii_size + mii_vertical_spacing))
@@ -309,6 +309,7 @@ class TournamentImageGenerator:
         player_score = player_data["score"]
         mmr_change = player_data["mmr_change"]
         new_mmr = player_data["new_mmr"]
+        completion = player_data["completion"]
         
         # Determine rank based on MMR
         rank = self._determine_rank_from_mmr(new_mmr)
@@ -332,34 +333,46 @@ class TournamentImageGenerator:
         mmr_prefix = "+" if mmr_change > 0 else ""
         score_text = f"{player_score}"
         mmr_text = f"{mmr_prefix}{mmr_change}"
-        new_mmr_text = f"{new_mmr}"
+        
+        # If the player is not fully placed, add an asterisk to the MMR
+        new_mmr_text = f"{new_mmr}*" if completion in ["1/3", "2/3"] else f"{new_mmr}"
         
         # Calculate MMR color
         mmr_color = self.colors['mmr_up'] if mmr_change >= 0 else self.colors['mmr_down']
         
-        # Get direction icon URL based on rank change
-        direction_icon = None
-        direction_tint = None
-        if rank_change > 0:
-            direction_url = self.config['direction_icons']['up']
-            direction_tint = self.colors['mmr_up']
-        elif rank_change < 0:
-            direction_url = self.config['direction_icons']['down']
-            direction_tint = self.colors['mmr_down']
+        # Check if we need to show placement completion instead of rank icons
+        if completion in ["1/3", "2/3"]:
+            # Player is in placement matches - prepare to show completion text
+            placement_text = completion
+            placement_color = name_color  # Use same color as name
         else:
-            direction_url = self.config['direction_icons']['neutral']
+            # Player is fully placed - prepare rank change and rank icons
+            # Get direction icon URL based on rank change
+            direction_icon = None
             direction_tint = None
-        
-        # Load direction icon with caching
-        rank_change_icon_size = (stats_size - 5, stats_size - 5)
-        direction_icon = self._load_image_from_url(direction_url, rank_change_icon_size)
-        
-        # Get rank icon from the config based on determined rank
-        rank_icon = None
-        rank_icon_size = (stats_size, stats_size)
-        if "rank_icons" in self.config and rank in self.config["rank_icons"]:
-            rank_icon_url = self.config["rank_icons"][rank]
-            rank_icon = self._load_image_from_url(rank_icon_url, rank_icon_size)
+            if completion == "3/3":
+                direction_url = self.config['direction_icons']['right']
+                direction_tint = None
+            elif rank_change > 0:
+                direction_url = self.config['direction_icons']['up']
+                direction_tint = self.colors['mmr_up']
+            elif rank_change < 0:
+                direction_url = self.config['direction_icons']['down']
+                direction_tint = self.colors['mmr_down']
+            else:
+                direction_url = self.config['direction_icons']['neutral']
+                direction_tint = None
+            
+            # Load direction icon with caching
+            rank_change_icon_size = (stats_size - 5, stats_size - 5)
+            direction_icon = self._load_image_from_url(direction_url, rank_change_icon_size)
+            
+            # Get rank icon from the config based on determined rank
+            rank_icon = None
+            rank_icon_size = (stats_size, stats_size)
+            if "rank_icons" in self.config and rank in self.config["rank_icons"]:
+                rank_icon_url = self.config["rank_icons"][rank]
+                rank_icon = self._load_image_from_url(rank_icon_url, rank_icon_size)
         
         # Calculate icon sizes
         rank_change_icon_size = (stats_size - 5, stats_size - 5)
@@ -369,13 +382,20 @@ class TournamentImageGenerator:
         full_stats_text = f"{score_text}{separator}{mmr_text}{separator}{new_mmr_text}"
         full_stats_width = draw.textlength(full_stats_text, font=stats_font)
         
-        # Add icon widths and separator to total width
+        # Add width of completion text or icon widths
         separator_width = draw.textlength(separator, font=stats_font)
-        icons_width = 0
-        if direction_icon:
-            icons_width += rank_change_icon_size[0] + horizontal_spacing//2
-        if rank_icon:
-            icons_width += rank_icon_size[0]
+        
+        if completion in ["1/3", "2/3"]:
+            # Calculate width needed for completion text
+            placement_width = draw.textlength(placement_text, font=stats_font)
+            icons_width = placement_width
+        else:
+            # Calculate width needed for icons
+            icons_width = 0
+            if 'direction_icon' in locals() and direction_icon:
+                icons_width += rank_change_icon_size[0] + horizontal_spacing//2
+            if 'rank_icon' in locals() and rank_icon:
+                icons_width += rank_icon_size[0]
         
         # Center everything
         total_width = full_stats_width + separator_width + icons_width
@@ -397,47 +417,51 @@ class TournamentImageGenerator:
         draw.text((stats_x, stats_y), separator, fill=name_color, font=stats_font)
         stats_x += draw.textlength(separator, font=stats_font)
         
-        # Draw new MMR
+        # Draw new MMR (with asterisk for placement players)
         draw.text((stats_x, stats_y), new_mmr_text, fill=name_color, font=stats_font)
         stats_x += draw.textlength(new_mmr_text, font=stats_font)
         
-        # Draw separator before icons
+        # Draw separator before icons or completion text
         draw.text((stats_x, stats_y), separator, fill=name_color, font=stats_font)
         stats_x += draw.textlength(separator, font=stats_font)
         
-        # Get icon vertical alignment adjustment from config and scale it with the stats size
-        base_icon_y_offset = self.podium_style['icon_y_offset']
-        # Scale offset based on the ratio of current size to a reference size (e.g., 40)
-        reference_size = 40  # Reference font size for scaling
-        icon_y_offset = base_icon_y_offset * (stats_size / reference_size)
-        
-        # Calculate common vertical position for both icons with configurable and scaled offset
-        icons_y = stats_y + (stats_size - rank_change_icon_size[1]) // 2 + int(icon_y_offset)
-        
-        # Draw direction icon
-        if direction_icon:
-            # Apply tinting if needed
-            if direction_tint:
-                # Convert hex color to RGB tuple
-                rgb_color = ImageColor.getrgb(direction_tint)
-                
-                # Create a solid color image with our tint
-                tint = Image.new('RGBA', direction_icon.size, (*rgb_color, 255))
-                
-                # Apply tint by using the icon as a mask
-                mask = direction_icon.split()[3]
-                tinted_icon = Image.new('RGBA', direction_icon.size, (0, 0, 0, 0))
-                tinted_icon.paste(tint, (0, 0), mask)
-                direction_icon = tinted_icon
+        if completion in ["1/3", "2/3"]:
+            # Draw completion text instead of icons
+            draw.text((stats_x, stats_y), placement_text, fill=placement_color, font=stats_font)
+        else:
+            # Get icon vertical alignment adjustment from config and scale it with the stats size
+            base_icon_y_offset = self.podium_style['icon_y_offset']
+            # Scale offset based on the ratio of current size to a reference size (e.g., 40)
+            reference_size = 40  # Reference font size for scaling
+            icon_y_offset = base_icon_y_offset * (stats_size / reference_size)
             
-            # Paste direction icon
-            img.paste(direction_icon, (int(stats_x), int(icons_y)), direction_icon)
-            stats_x += rank_change_icon_size[0] + horizontal_spacing//2
-        
-        # Draw rank icon
-        if rank_icon:
-            # Paste rank icon
-            img.paste(rank_icon, (int(stats_x), int(icons_y)), rank_icon)
+            # Calculate common vertical position for both icons with configurable and scaled offset
+            icons_y = stats_y + (stats_size - rank_change_icon_size[1]) // 2 + int(icon_y_offset)
+            
+            # Draw direction icon
+            if direction_icon:
+                # Apply tinting if needed
+                if direction_tint:
+                    # Convert hex color to RGB tuple
+                    rgb_color = ImageColor.getrgb(direction_tint)
+                    
+                    # Create a solid color image with our tint
+                    tint = Image.new('RGBA', direction_icon.size, (*rgb_color, 255))
+                    
+                    # Apply tint by using the icon as a mask
+                    mask = direction_icon.split()[3]
+                    tinted_icon = Image.new('RGBA', direction_icon.size, (0, 0, 0, 0))
+                    tinted_icon.paste(tint, (0, 0), mask)
+                    direction_icon = tinted_icon
+                
+                # Paste direction icon
+                img.paste(direction_icon, (int(stats_x), int(icons_y)), direction_icon)
+                stats_x += rank_change_icon_size[0] + horizontal_spacing//2
+            
+            # Draw rank icon
+            if rank_icon:
+                # Paste rank icon
+                img.paste(rank_icon, (int(stats_x), int(icons_y)), rank_icon)
 
     def _render_podium(self, img, results):
         """
@@ -564,7 +588,7 @@ class TournamentImageGenerator:
                         player_idx = i * team_size + team_member_idx
                         if player_idx < len(results):
                             player_data = results[player_idx]
-                            mii_url = player_data.get("mii", player_data["name"])
+                            mii_url = player_data["mii"]
                             
                             # Calculate x position for this Mii
                             x_pos = mii_start_x + (team_member_idx * (mii_size + mii_horizontal_spacing))
@@ -913,48 +937,12 @@ if __name__ == "__main__":
             print()  # Add newline at the end
     
     # Create generator with progress callback
-    generator = TournamentImageGenerator("6v6", progress_callback=print_progress)
+    generator = LTRCImageGenerator("FFA", progress_callback=print_progress)
     
     # Sample Mii URL
     mii_url = None
     
-    results = [
-    {"name": "Blazico", "score": 185, "mmr_change": +32, "new_mmr": 5000, 
-     "mii": "https://drive.google.com/uc?export=view&id=1V3ScziEfb7dHyKwW_esaqlyY61oKPz5C"},
-     
-    {"name": "Ryumi", "score": 172, "mmr_change": -28, "new_mmr": 3999, 
-     "mii": "https://drive.google.com/uc?export=view&id=1yv6EPg1lZd7O5DKQ8fcKCGaDHKB7KVO_"},
-     
-    {"name": "KogMawMain", "score": 168, "mmr_change": +25, "new_mmr": 1968, 
-     "mii": "https://drive.google.com/uc?export=view&id=1vIbLh7lDv7ud_HoEaceEGJVzTFkLb0Vx"},
-     
-    {"name": "Gaberboo", "score": 155, "mmr_change": +22, "new_mmr": 1855, 
-     "mii": mii_url},
-     
-    {"name": "TealS", "score": 142, "mmr_change": +18, "new_mmr": 1742, 
-     "mii": mii_url},
-     
-    {"name": "Fern", "score": 135, "mmr_change": +15, "new_mmr": 1635, 
-     "mii": mii_url},
-     
-    {"name": "Police", "score": 128, "mmr_change": +12, "new_mmr": 1528, 
-     "mii": mii_url},
-     
-    {"name": "Turtspotato", "score": 118, "mmr_change": +8, "new_mmr": 1418, 
-     "mii": mii_url},
-     
-    {"name": "Rockyroller", "score": 105, "mmr_change": +5, "new_mmr": 1305, 
-     "mii": mii_url},
-     
-    {"name": "Bepisman", "score": 95, "mmr_change": +3, "new_mmr": 1195, 
-     "mii": mii_url},
-     
-    {"name": "Rowan Atkinson", "score": 85, "mmr_change": +1, "new_mmr": 1085, 
-     "mii": mii_url},
-     
-    {"name": "King William III", "score": 75, "mmr_change": 0, "new_mmr": 1000, 
-     "mii": mii_url}
-    ]
+    results = [{'name': 'Blazico', 'score': 12, 'mmr_change': 179, 'new_mmr': 1179, 'mii': 'https://drive.google.com/uc?export=view&id=1V3ScziEfb7dHyKwW_esaqlyY61oKPz5C', 'completion': '3/3'}, {'name': 'Turts-Potato', 'score': 11, 'mmr_change': 74, 'new_mmr': 5089, 'mii': None, 'completion': ''}, {'name': 'Chase', 'score': 10, 'mmr_change': 45, 'new_mmr': 5494, 'mii': None, 'completion': ''}, {'name': 'TealS', 'score': 9, 'mmr_change': 48, 'new_mmr': 4396, 'mii': None, 'completion': ''}, {'name': 'Soda', 'score': 8, 'mmr_change': 38, 'new_mmr': 3936, 'mii': None, 'completion': ''}, {'name': 'Gaberboo', 'score': 7, 'mmr_change': -35, 'new_mmr': 6568, 'mii': None, 'completion': ''}, {'name': 'Ross', 'score': 6, 'mmr_change': -52, 'new_mmr': 6338, 'mii': None, 'completion': ''}, {'name': 'LucioWins', 'score': 5, 'mmr_change': 16, 'new_mmr': 2230, 'mii': None, 'completion': '2/3'}, {'name': 'Mr.Spiderbot', 'score': 4, 'mmr_change': 28, 'new_mmr': 528, 'mii': None, 'completion': '1/3'}, {'name': 'Kaizox', 'score': 3, 'mmr_change': -38, 'new_mmr': 2777, 'mii': None, 'completion': ''}, {'name': 'Ryumi', 'score': 2, 'mmr_change': -50, 'new_mmr': 2429, 'mii': None, 'completion': '2/3'}, {'name': 'Fern', 'score': 1, 'mmr_change': -32, 'new_mmr': 468, 'mii': None, 'completion': '1/3'}] 
     
     subtitle = "Event A 12-12-1234"
     img = generator.generate(results, subtitle)
