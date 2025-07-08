@@ -21,18 +21,17 @@ import threading
 # Sovereign: 15000+
 
 class LTRCImageGenerator:
-    def __init__(self, format_type, progress_callback=None):
+    def __init__(self, format_type, config, progress_callback=None):
         """
         Initialize the tournament image generator with a specific format type.
         
         Args:
             format_type: The format of the tournament (e.g., "FFA", "2vs2")
+            config: Configuration dictionary for the image generator
             progress_callback: Optional callback function for progress updates
         """
-        # Load configuration from the imagegen directory
-        config_path = os.path.join(os.path.dirname(__file__), "config.json")
-        with open(config_path, 'r') as f:
-            self.config = json.load(f)
+        # Store the provided config
+        self.config = config
         
         # Store the format type
         self.format_type = format_type
@@ -49,6 +48,9 @@ class LTRCImageGenerator:
         self.podium_style = self.format_config['podium_style']
         self.podium_count = self.format_config['podium_count']
         self.team_size = self.format_config['team_size']
+        
+        # Path to rank icons folder
+        self.rank_icons_dir = os.path.join(os.path.dirname(__file__), 'rank_icons')
 
         # Image cache for faster repeated loading - only caches original images
         self.image_cache = {}
@@ -91,54 +93,63 @@ class LTRCImageGenerator:
             if self.progress_callback and callable(self.progress_callback):
                 self.progress_callback(progress, message)
     
-    def _load_image_from_url(self, url, size=None):
+    def _load_image(self, source, size=None):
         """
-        Load an image from a URL with simple memory caching of original images
+        Load an image from URL or local file path
         
         Args:
-            url: URL to load the image from
+            source: URL or file path to load the image from
             size: Optional tuple (width, height) to resize the image
             
         Returns:
             PIL.Image: Loaded image or None if failed
         """
-        if not url:
+        if not source:
             return None
-            
+        
         # Check memory cache for original image
-        if url in self.image_cache:
-            img = self.image_cache[url]
-            # Resize if needed (don't cache the resized version)
+        if source in self.image_cache:
+            img = self.image_cache[source]
+            # Resize if needed
             if size and img.size != size:
                 return img.resize(size)
-            return img.copy()  # Return a copy to prevent modifications affecting the cached image
-        
-        # Load from URL if not in cache
+            return img.copy()  # Return a copy to prevent modifications
+    
+        # Load from URL or file
         try:
-            # Use session for connection pooling and timeout
-            response = self.session.get(url, stream=True, timeout=self.request_timeout)
-            if response.status_code == 200:
-                img = Image.open(BytesIO(response.content))
-                
-                # Convert to RGBA if needed
-                if img.mode == 'P' and 'transparency' in img.info:
-                    img = img.convert('RGBA')
-                elif img.mode != 'RGBA':
-                    img = img.convert('RGBA')
-                
-                # Cache the original image in memory
-                self.image_cache[url] = img
-                
-                # Return a resized copy if size is specified
-                if size and img.size != size:
-                    return img.resize(size)
-                return img.copy()  # Return a copy to prevent modifications affecting the cached image
+            if source.startswith(('http://', 'https://')):
+                # Load from URL (only used for Mii images)
+                response = self.session.get(source, stream=True, timeout=self.request_timeout)
+                if response.status_code == 200:
+                    img = Image.open(BytesIO(response.content))
+                else:
+                    return None
             else:
-                print(f"Failed to load image from URL: {url}")
-                return None
+                # Load from local file
+                img = Image.open(source)
+        
+            # Convert to RGBA if needed
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            
+            # Cache the original image in memory
+            self.image_cache[source] = img
+            
+            # Return resized copy if size specified
+            if size and img.size != size:
+                return img.resize(size)
+            return img.copy()
+        
         except Exception as e:
-            print(f"Error loading image from URL: {e}")
             return None
+
+    def _get_rank_icon_path(self, rank):
+        """Get the path to a rank icon file"""
+        return os.path.join(self.rank_icons_dir, f"{rank}.png")
+
+    def _get_direction_icon_path(self, direction):
+        """Get the path to a direction icon file"""
+        return os.path.join(self.rank_icons_dir, f"{direction}.png")
 
     def _create_base_image(self):
         """Create the base image with background"""
@@ -191,20 +202,17 @@ class LTRCImageGenerator:
 
     def _draw_mii(self, img, mii_url, x_pos, y_pos, mii_size):
         """
-        Draw a player's Mii image from URL at the specified position
+        Draw a player's Mii image at the specified position
         
         Args:
             img: The PIL image to draw on
-            mii_url: URL to the Mii image
+            mii_url: URL or path to the Mii image
             x_pos: X position to draw the Mii
             y_pos: Y Position to draw the Mii
             mii_size: Size (width and height) of the Mii image
-            
-        Returns:
-            None
         """
         # Load Mii image with caching
-        mii_img = self._load_image_from_url(mii_url, (mii_size, mii_size))
+        mii_img = self._load_image(mii_url, (mii_size, mii_size))
         
         # Paste if loaded successfully
         if mii_img:
@@ -347,32 +355,32 @@ class LTRCImageGenerator:
             placement_color = name_color  # Use same color as name
         else:
             # Player is fully placed - prepare rank change and rank icons
-            # Get direction icon URL based on rank change
+            # Get direction icon path based on rank change
             direction_icon = None
             direction_tint = None
+            
             if completion == "3/3":
-                direction_url = self.config['direction_icons']['right']
+                direction_path = self._get_direction_icon_path("right")
                 direction_tint = None
             elif rank_change > 0:
-                direction_url = self.config['direction_icons']['up']
+                direction_path = self._get_direction_icon_path("up")
                 direction_tint = self.colors['mmr_up']
             elif rank_change < 0:
-                direction_url = self.config['direction_icons']['down']
+                direction_path = self._get_direction_icon_path("down")
                 direction_tint = self.colors['mmr_down']
             else:
-                direction_url = self.config['direction_icons']['neutral']
+                direction_path = self._get_direction_icon_path("neutral")
                 direction_tint = None
             
             # Load direction icon with caching
             rank_change_icon_size = (stats_size - 5, stats_size - 5)
-            direction_icon = self._load_image_from_url(direction_url, rank_change_icon_size)
+            direction_icon = self._load_image(direction_path, rank_change_icon_size)
             
-            # Get rank icon from the config based on determined rank
+            # Get rank icon path and load it
             rank_icon = None
             rank_icon_size = (stats_size, stats_size)
-            if "rank_icons" in self.config and rank in self.config["rank_icons"]:
-                rank_icon_url = self.config["rank_icons"][rank]
-                rank_icon = self._load_image_from_url(rank_icon_url, rank_icon_size)
+            rank_icon_path = self._get_rank_icon_path(rank)
+            rank_icon = self._load_image(rank_icon_path, rank_icon_size)
         
         # Calculate icon sizes
         rank_change_icon_size = (stats_size - 5, stats_size - 5)
@@ -812,32 +820,31 @@ class LTRCImageGenerator:
 
     def preload_common_assets(self):
         """Preload commonly used assets in parallel"""
-        urls_to_load = []
+        paths_to_load = []
         
         # Add direction icons
-        if 'direction_icons' in self.config:
-            urls_to_load.extend(self.config['direction_icons'].values())
+        for direction in ["up", "down", "neutral", "right"]:
+            paths_to_load.append(self._get_direction_icon_path(direction))
         
-        # Add rank icons
-        if 'rank_icons' in self.config:
-            urls_to_load.extend(self.config['rank_icons'].values())
+        # Add rank icons for all ranks
+        for rank in ["tin", "bronze", "silver", "gold", "emerald", "sapphire", 
+                    "ruby", "duke", "master", "grandmaster", "monarch", "sovereign"]:
+            paths_to_load.append(self._get_rank_icon_path(rank))
         
-        if not urls_to_load:
+        if not paths_to_load:
             return
-            
-        print(f"Preloading {len(urls_to_load)} common assets...")
+        
         start_time = time.time()
         
         # Update progress tracking
-        self.total_steps += len(urls_to_load)
+        self.total_steps += len(paths_to_load)
         
-        # Load assets one by one (can be parallelized later if needed)
-        for url in urls_to_load:
-            self._load_image_from_url(url)
-            self._update_progress(1, f"Preloaded asset: {url}")
+        # Load assets one by one
+        for path in paths_to_load:
+            self._load_image(path)
+            self._update_progress(1, f"Preloaded: {os.path.basename(path)}")
             
         elapsed_time = time.time() - start_time
-        print(f"Preloaded {len(urls_to_load)} assets in {elapsed_time:.2f} seconds")
 
     def generate(self, results, subtitle=None):
         """
@@ -873,14 +880,12 @@ class LTRCImageGenerator:
                 mii_urls.append(player["mii"]) 
                 
         if mii_urls:
-            print(f"Prefetching {len(mii_urls)} Mii images...")
             prefetch_start = time.time()
             for url in mii_urls:
-                self._load_image_from_url(url)
-                self._update_progress(1, f"Loaded Mii: {url[:30]}...")
+                self._load_image(url)
+                self._update_progress(1, f"Loaded Mii: {os.path.basename(url)[:30]}")
             elapsed = time.time() - prefetch_start
-            print(f"Prefetched {len(mii_urls)} Mii images in {elapsed:.2f} seconds")
-        
+    
         # Update progress for starting the rendering process
         self._update_progress(0, "Rendering tournament results image...")
         
@@ -920,30 +925,5 @@ class LTRCImageGenerator:
         
         # Report total generation time
         elapsed_time = time.time() - start_time
-        print(f"Image generation completed in {elapsed_time:.2f} seconds")
         
         return final_img
-
-if __name__ == "__main__":
-    # Example usage with a simple console progress display
-    def print_progress(percentage, message=None):
-        bar_length = 20
-        filled_length = int(bar_length * percentage / 100)
-        bar = '█' * filled_length + '░' * (bar_length - filled_length)
-        msg = f" | {message}" if message else ""
-        print(f"\r[{bar}] {percentage}%{msg}", end='', flush=True)
-        if percentage == 100:
-            print()  # Add newline at the end
-    
-    # Create generator with progress callback
-    generator = LTRCImageGenerator("FFA", progress_callback=print_progress)
-    
-    # Sample Mii URL
-    mii_url = None
-    
-    results = [{'name': 'Blazico', 'score': 12, 'mmr_change': 179, 'new_mmr': 1179, 'mii': 'https://drive.google.com/uc?export=view&id=1V3ScziEfb7dHyKwW_esaqlyY61oKPz5C', 'completion': '3/3'}, {'name': 'Turts-Potato', 'score': 11, 'mmr_change': 74, 'new_mmr': 5089, 'mii': None, 'completion': ''}, {'name': 'Chase', 'score': 10, 'mmr_change': 45, 'new_mmr': 5494, 'mii': None, 'completion': ''}, {'name': 'TealS', 'score': 9, 'mmr_change': 48, 'new_mmr': 4396, 'mii': None, 'completion': ''}, {'name': 'Soda', 'score': 8, 'mmr_change': 38, 'new_mmr': 3936, 'mii': None, 'completion': ''}, {'name': 'Gaberboo', 'score': 7, 'mmr_change': -35, 'new_mmr': 6568, 'mii': None, 'completion': ''}, {'name': 'Ross', 'score': 6, 'mmr_change': -52, 'new_mmr': 6338, 'mii': None, 'completion': ''}, {'name': 'LucioWins', 'score': 5, 'mmr_change': 16, 'new_mmr': 2230, 'mii': None, 'completion': '2/3'}, {'name': 'Mr.Spiderbot', 'score': 4, 'mmr_change': 28, 'new_mmr': 528, 'mii': None, 'completion': '1/3'}, {'name': 'Kaizox', 'score': 3, 'mmr_change': -38, 'new_mmr': 2777, 'mii': None, 'completion': ''}, {'name': 'Ryumi', 'score': 2, 'mmr_change': -50, 'new_mmr': 2429, 'mii': None, 'completion': '2/3'}, {'name': 'Fern', 'score': 1, 'mmr_change': -32, 'new_mmr': 468, 'mii': None, 'completion': '1/3'}] 
-    
-    subtitle = "Event A 12-12-1234"
-    img = generator.generate(results, subtitle)
-    # img.show()  # Display the image
-    img.save("tournament_results.png")  # Save to file

@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from PIL import Image
 from io import BytesIO
+import json
+import sys
 
 class LTRCModel:
     def __init__(self):
@@ -66,8 +68,38 @@ class LTRCModel:
         Returns:
             PIL.Image: The generated image
         """
-        # Create the image generator with the current format
-        generator = LTRCImageGenerator(self.LTRC.mode, progress_callback)
+        # Load the image generator config
+        try:
+            # Get the correct base path that works with PyInstaller
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+                
+            config_path = os.path.join(base_path, "config.json")
+            
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            # Update file paths in the config to be absolute
+            if 'font_file' in config:
+                config['font_file'] = os.path.join(base_path, config['font_file'])
+            
+            if 'background_image' in config:
+                config['background_image'] = os.path.join(base_path, config['background_image'])
+            
+            # Ensure the rank_icons folder path is absolute
+            config['rank_icons_dir'] = os.path.join(base_path, 'rank_icons')
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to load image generator config from {config_path}")
+        
+        # Create the image generator with the current format and required config
+        generator = LTRCImageGenerator(
+            self.LTRC.mode,
+            config,
+            progress_callback=progress_callback
+        )
         
         # Get the player results from LTRC
         results = self.LTRC.get_results()

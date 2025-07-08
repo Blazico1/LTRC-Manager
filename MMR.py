@@ -2,7 +2,9 @@ import gspread
 from gspread.utils import ValueRenderOption
 import numpy as np
 from google.oauth2.service_account import Credentials
-from settings import load_settings
+import sys
+import os
+import json
 
 '''
 author: Zakaria Hayaty (Blazico)
@@ -35,21 +37,31 @@ MMR_THRESHOLDS = {
 
 class LTRC_manager():
     def __init__(self) -> None:
-        
-        # Load the settings
-        self.settings = load_settings()
+        # Load configuration
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            
+        config_path = os.path.join(base_path, "config.json")
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            
+        # Get sheetname from config
+        self.sheetname = config.get('sheetname', 'LTRC Manager MMR calculator')
 
         # Define the scope
         scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive.file','https://www.googleapis.com/auth/drive']
 
         # Add your service account file
-        creds = Credentials.from_service_account_file('auto-mmr-calculator-9676e1429d9a.json', scopes=scope)
+        credentials_path = os.path.join(base_path, 'auto-mmr-calculator-9676e1429d9a.json')
+        creds = Credentials.from_service_account_file(credentials_path, scopes=scope)
 
         # Authorize the clientsheet
         client = gspread.authorize(creds)
 
         # Get the instance of the Spreadsheet
-        sheet = client.open(self.settings['sheetname']) 
+        sheet = client.open(self.sheetname) 
 
         # Get the individual sheets of the Spreadsheet
         # self.Team_Rankings_and_Personal_Evaluation = sheet.get_worksheet(0)
