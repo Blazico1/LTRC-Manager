@@ -1,7 +1,10 @@
 import gspread
+from gspread.utils import ValueRenderOption
 import numpy as np
 from google.oauth2.service_account import Credentials
-from settings import load_settings
+import sys
+import os
+import json
 
 '''
 author: Zakaria Hayaty (Blazico)
@@ -34,21 +37,31 @@ MMR_THRESHOLDS = {
 
 class LTRC_manager():
     def __init__(self) -> None:
-        
-        # Load the settings
-        self.settings = load_settings()
+        # Load configuration
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            
+        config_path = os.path.join(base_path, "config.json")
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            
+        # Get sheetname from config
+        self.sheetname = config.get('sheetname', 'LTRC Manager MMR calculator')
 
         # Define the scope
         scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive.file','https://www.googleapis.com/auth/drive']
 
         # Add your service account file
-        creds = Credentials.from_service_account_file('auto-mmr-calculator-9676e1429d9a.json', scopes=scope)
+        credentials_path = os.path.join(base_path, 'auto-mmr-calculator-9676e1429d9a.json')
+        creds = Credentials.from_service_account_file(credentials_path, scopes=scope)
 
         # Authorize the clientsheet
         client = gspread.authorize(creds)
 
         # Get the instance of the Spreadsheet
-        sheet = client.open(self.settings['sheetname']) 
+        sheet = client.open(self.sheetname) 
 
         # Get the individual sheets of the Spreadsheet
         # self.Team_Rankings_and_Personal_Evaluation = sheet.get_worksheet(0)
@@ -61,121 +74,107 @@ class LTRC_manager():
 
         # Get the mode from the spreadsheet
         self.mode = self.Table_stuff.get("C1")[0][0] 
-
-        # # Account for possible 6vs6 mode (12 players)
-        # if self.mode == "5vs5":
-        #     cell1 = self.TR_Tables.get("C97")[0][0]
-        #     cell2 = self.TR_Tables.get("C105")[0][0]
-        #     # If the cells are not empty, the mode is 6vs6
-        #     if cell1 != "" and cell2 != "":
-        #         self.mode = "6vs6"
             
         # Toggle flag for 32 track mode
         self.flag_32track = False
 
+    def _update_progress(self, value, message=None):
+        """Update the progress callback if provided"""
+        if hasattr(self, 'progress_callback') and self.progress_callback and callable(self.progress_callback):
+            self.progress_callback(value, message)
+
+    def LTRC_routine(self, progress_callback=None):
+        """
+        Main routine to process data with optional progress tracking
+        
+        Args:
+            progress_callback: Optional function to report loading progress
+        """
+        # Store the progress callback for use by other methods
+        self.progress_callback = progress_callback
+        
+        # Update progress: Starting
+        self._update_progress(0, "Initialising tournament data processing...")
+        
+        # Get data from the sheet
+        self.get_all()
+        self._update_progress(40, "Analysing player rankings and calculating team positions...")
+        
+        # Process rankings
+        self.find_ranking()
+        self._update_progress(60, "Determining K-values based on player positions...")
+        
+        # Find K-values
+        self.find_k_values()
+        self._update_progress(80, "Calculating MMR changes and final ratings...")
+        
+        # Calculate new MMR values
+        self.calc_new_MMR()
+        self._update_progress(100, "Tournament data processing completed successfully!")
+        
+        # Clean up
+        self.progress_callback = None
+
     def get_all(self):
         '''
-        This method reads all the required data from the spreadsheet
+        This method reads all the required data from the spreadsheet using a single API call
         '''
-        
-        self.get_racers()
-        self.get_scores()
-        self.get_MMRs()
+        # Define range based on the mode
+        match self.mode:
+            case "FFA":
+                range_str = "B3:E14"
+            case "2vs2":
+                range_str = "B23:E39"
+            case "3vs3":
+                range_str = "B48:E62"
+            case "4vs4":
+                range_str = "B71:E84"
+            case "5vs5":
+                range_str = "B92:E104"
+            case "6vs6":
+                range_str = "B92:E104"
 
+        self._update_progress(5, f"Retrieving {self.mode} tournament data from Google Sheets...")
+        
+        # Get all data in a single API call
+        data = self.TR_Tables.get(range_str)
+        self._update_progress(15, "Extracting player names, scores and current MMR values...")
+        
+        # Process the data
+        self.racers = []
+        self.scores = []
+        self.MMRs = []
+        
+        for row in data:
+            # Only process rows with data
+            if row and len(row) >= 2 and row[0] != '':
+                self.racers.append(row[0])
+                # Convert scores to integers
+                self.scores.append(int(row[1]))
+                # Get MMR from column E (index 3)
+                if len(row) > 3:
+                    self.MMRs.append(row[3])
+                else:
+                    self.MMRs.append("???")
+
+        if len(self.racers) == 0:
+            raise ValueError("No racers found in the sheet")
+        
         if len(self.racers) != len(self.scores) or len(self.racers) != len(self.MMRs):
             raise ValueError("The number of racers, scores and MMRs do not match")
         
+        # Add any new players to the sheets
+        self._update_progress(20, "Checking for new players and adding them to database...")
+        self.handle_new_players()
+        
+        # Calculate placements for unplaced players
+        self._update_progress(25, "Calculating placement progress for unplaced players...")
         self.calculate_placement()
 
         # Calculate the average MMR of the room
-        self.average_room_MMR = np.average(self.LR_list) 
+        self._update_progress(35, "Calculating room MMR average for balanced matchmaking...")
+        self.average_room_MMR = np.average(self.LR_list)
 
-    def get_racers(self):
-        '''
-        This method returns the order of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                racers = self.TR_Tables.get("B3:B14")
-                self.racers = [value for sublist in racers for value in sublist]
-            case "2vs2":
-                racers = self.TR_Tables.get("B23:B39")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "3vs3":
-                racers = self.TR_Tables.get("B48:B62")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "4vs4":
-                racers = self.TR_Tables.get("B71:B84")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "5vs5":
-                racers = self.TR_Tables.get("B92:B104")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-            case "6vs6":
-                racers = self.TR_Tables.get("B92:B104")
-                self.racers = [value for sublist in racers for value in sublist if value != '']
-
-        if len(self.racers) == 0:
-            raise ValueError("No racers found in the sheet") 
-        
-        self.handle_new_players()
-
-    def get_scores(self):
-        '''
-        This method returns the scores of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                scores = self.TR_Tables.get("C3:C14")
-                self.scores = [int(value) for sublist in scores for value in sublist]
-            case "2vs2":
-                scores = self.TR_Tables.get("C23:C39")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "3vs3":
-                scores = self.TR_Tables.get("C48:C62")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "4vs4":
-                scores = self.TR_Tables.get("C71:C84")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "5vs5":
-                scores = self.TR_Tables.get("C92:C104")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-            case "6vs6":
-                scores = self.TR_Tables.get("C92:C104")
-                self.scores = [int(value) for sublist in scores for value in sublist if value != '']
-
-        if len(self.scores) == 0:
-            raise ValueError("No scores found in the sheet")
-
-    def get_MMRs(self):
-        '''
-        This method returns the MMRs of the racers
-        '''
-
-        match self.mode:
-            case "FFA":
-                MMRs = self.TR_Tables.get("E3:E14")
-                self.MMRs = [value for sublist in MMRs for value in sublist]
-            case "2vs2":
-                MMRs = self.TR_Tables.get("E23:E39")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "3vs3":
-                MMRs = self.TR_Tables.get("E48:E62")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "4vs4":
-                MMRs = self.TR_Tables.get("E71:E84")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "5vs5":
-                MMRs = self.TR_Tables.get("E92:E104")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-            case "6vs6":
-                MMRs = self.TR_Tables.get("E92:E104")
-                self.MMRs = [value for sublist in MMRs for value in sublist if value != '']
-
-        if len(self.MMRs) == 0:
-            raise ValueError("No MMRs found in the sheet")
-    
     def handle_new_players(self):
         '''
         This method checks for new players and adds them to both Playerdata and Placements tabs
@@ -191,12 +190,11 @@ class LTRC_manager():
         
         # If there are new players, add them to both sheets
         if new_players:
-            # Get all player names from Playerdata to find empty rows efficiently
+            # Get all player names from Playerdata and Placements
             playerdata_names = self.Playerdata.col_values(1)
-            playerdata_row = len(playerdata_names) + 1  # First empty row
-            
-            # Get all player names from Placements to find empty rows efficiently
             placements_names = self.Placements.col_values(1)
+            
+            playerdata_row = len(playerdata_names) + 1  # First empty row
             placements_row = len(placements_names) + 1  # First empty row
             
             # If Placements has header rows, adjust the start index
@@ -220,16 +218,39 @@ class LTRC_manager():
     def calculate_placement(self):
         '''
         This method assumes the MMR of unplaced racers and calculates their placements
+        Using a single API call to read the complete Placements worksheet
         '''
         num = len(self.racers)
         MMRs = self.MMRs
         self.LR_list = []
         self.is_placed = []
         self.placement_updates = []
-        self.completion= []
+        self.completion = []
 
-        averages = [] #debug list
-    
+        # Get all placement data at once in a single API call
+        placements_data = self.Placements.get_all_values()[4:]  # Skip header rows
+        
+        # Create a dictionary for quick lookups
+        placements_dict = {}
+        for row_idx, row in enumerate(placements_data, start=5):
+            if row and len(row) > 0 and row[0]:
+                placements_dict[row[0]] = {
+                    'row': row_idx,
+                    'completion': row[1] if len(row) > 1 else None,
+                    'point1': row[3] if len(row) > 3 and row[3] else None,
+                    'point2': row[4] if len(row) > 4 and row[4] else None,
+                    'point3': row[5] if len(row) > 5 and row[5] else None,
+                    'mmr_accum': row[7] if len(row) > 7 and row[7] else "0"
+                }
+
+        # Find the first empty row
+        empty_row = 5
+        while empty_row < len(placements_data) + 5 and placements_data[empty_row - 5] and placements_data[empty_row - 5][0]:
+            empty_row += 1
+        
+        # Cache for playerdata lookups
+        playerdata_rows = {}
+        
         for i in range(num):
             # If the MMR is unknown
             if MMRs[i] == "???" or MMRs[i] == "":
@@ -239,54 +260,55 @@ class LTRC_manager():
                 points = [self.scores[i]]
                 if self.flag_32track:
                     points[0] /= 2.67
-    
-                # Look for the racer in the placements
-                location = self.Placements.find(racer)
-    
-                if location is None:
-                    # Player has no prior placements
-                    # Find the first empty row after the placed racers
-                    j = 5
-                    while self.Placements.cell(j,1).value is not None :
-                        j += 1
-    
-                    row = j
-                    self.completion.append("1/3")
-                    self.placement_updates.append((row, 1, racer))
-                    self.placement_updates.append((row, 2, "1/3"))
-                    self.placement_updates.append((row, 4, points[0]))
-    
-                else:
-                    row = location.row
-                    completion = self.Placements.cell(row, 2).value
-                    if completion is None:
+
+                # Check if player exists in placements
+                if racer in placements_dict:
+                    # Player exists in placements
+                    row = placements_dict[racer]['row']
+                    completion = placements_dict[racer]['completion']
+                    
+                    if not completion:
                         self.completion.append("1/3")
                         self.placement_updates.append((row, 2, "1/3"))
                         self.placement_updates.append((row, 4, points[0]))
                         
-                    if completion == "1/3":
+                    elif completion == "1/3":
                         self.completion.append("2/3")
                         self.placement_updates.append((row, 2, "2/3"))
                         self.placement_updates.append((row, 5, points[0]))
-    
+
                         # Get the points of the previous event
-                        points.append(int(self.Placements.cell(row,4).value))
+                        if placements_dict[racer]['point1']:
+                            points.append(float(placements_dict[racer]['point1']))
                     
                     elif completion == "2/3":
-                        self.completion.append("")
+                        self.completion.append("3/3")
                         # This event places the racer
                         self.is_placed[i] = True
 
                         self.placement_updates.append((row, 2, "3/3"))
                         self.placement_updates.append((row, 6, points[0]))
-    
+
                         # Get the points of the previous events
-                        points.append(int(self.Placements.cell(row,4).value))
-                        points.append(int(self.Placements.cell(row,5).value))
-    
+                        if placements_dict[racer]['point1']:
+                            points.append(float(placements_dict[racer]['point1']))
+                        if placements_dict[racer]['point2']:
+                            points.append(float(placements_dict[racer]['point2']))
+                    else:
+                        # Placements and playerdata mismatch, throw error
+                        raise ValueError(f"Placement and playerdata for {racer} is inconsistent: {completion} completion but MMR is unknown")
+                else:
+                    # Player doesn't exist in placements, add them
+                    row = empty_row
+                    empty_row += 1  # Increment for next new player
+                    
+                    self.completion.append("1/3")
+                    self.placement_updates.append((row, 1, racer))
+                    self.placement_updates.append((row, 2, "1/3"))
+                    self.placement_updates.append((row, 4, points[0]))
+
                 # Calculate the average number of points in the past event(s)
                 average = np.average(points)
-                averages.append(average) #debug list
 
                 # Calculate the MMR of the racer based on the average
                 for threshold, mmr in MMR_THRESHOLDS.items():
@@ -296,36 +318,30 @@ class LTRC_manager():
                 else:
                     MMR = 7750
 
-                if completion == "2/3":
+                if racer in placements_dict and placements_dict[racer]['completion'] == "2/3":
                     # MMR is average with previous season MMR
-
-                    # Get the previous season MMR
-                    row_playerdata = self.Playerdata.find(racer).row
+                    # Get the previous season MMR - use cache if available
+                    if racer in playerdata_rows:
+                        row_playerdata = playerdata_rows[racer]
+                    else:
+                        row_playerdata = self.Playerdata.find(racer).row
+                        playerdata_rows[racer] = row_playerdata
+                    
                     previous_season_MMR = self.Playerdata.cell(row_playerdata, 11).value
 
                     if previous_season_MMR is not None and previous_season_MMR != "???":
                         previous_season_MMR = int(previous_season_MMR)
                         MMR = (MMR + previous_season_MMR) / 2
-    
+
                 # Add previously gained MMR to the new MMR
-                temp = self.Placements.cell(row,8).value
-                MMR += int(temp) if temp is not None else 0
+                if racer in placements_dict and placements_dict[racer]['mmr_accum']:
+                    MMR += int(placements_dict[racer]['mmr_accum'])
+                
                 self.LR_list.append(MMR)
             else:
                 self.is_placed.append(True)
                 self.completion.append("")
                 self.LR_list.append(int(MMRs[i]))
-
-        print(averages) #debug list
-    
-    def update_placements(self):
-        '''
-        This method updates the cells in the placements based on the calculations made in calculate_placement
-        '''
-        cell_list = []
-        for row, column, value in self.placement_updates:
-            cell_list.append(gspread.models.Cell(row, column, value))
-        self.Placements.update_cells(cell_list)
 
     def find_ranking(self):
         '''
@@ -377,26 +393,29 @@ class LTRC_manager():
         '''
         This method makes a list of k values corresponding to the rankings of the racers and the mode
         '''
-        # insert the correct number of players into the sheet
+        # Insert the correct number of players into the sheet
         num_players = len(self.racers)
         self.Table_stuff.update("C1", [[self.mode]])
         self.Table_stuff.update("C2", [[num_players]])
 
-        # get the right k values depending on the mode
+        # Get the right k values depending on the mode
         match self.mode:
             case "FFA":
-                k_list = self.Table_stuff.get("E11:E22")
+                range_str = "E11:E22"
             case "2vs2":
-                k_list = self.Table_stuff.get("F11:F16")
+                range_str = "F11:F16"
             case "3vs3":
-                k_list = self.Table_stuff.get("G11:G14")
+                range_str = "G11:G14"
             case "4vs4":
-                k_list = self.Table_stuff.get("H11:H13")
+                range_str = "H11:H13"
             case "5vs5":
-                k_list = self.Table_stuff.get("I11:I12")
+                range_str = "I11:I12"
             case "6vs6":
-                k_list = self.Table_stuff.get("I11:I12")
+                range_str = "I11:I12"
+                
+        k_list = self.Table_stuff.get(range_str)
         
+        # Process k values
         # Flatten the list and convert strings to integers
         k_list = [int(value) for sublist in k_list for value in sublist]
 
@@ -406,7 +425,7 @@ class LTRC_manager():
             k_values.append(k_list[self.rankings[i]-1])     # -1 because the rankings start at 1 but the list starts at 0      
 
         self.k_values = k_values  # Save the k values to the class
-
+        
     def calc_new_MMR(self):
         C = int(self.Table_stuff.get("E1")[0][0]) # Get the C value from the spreadsheet
         LR = self.LR_list
@@ -440,7 +459,7 @@ class LTRC_manager():
             case "6vs6":
                 delta_MMRs = [sum(delta_MMRs[i:i+6])/6 for i in range(0, len(delta_MMRs), 6)]
                 self.delta_MMRs = [delta_MMRs[i//6] for i in range(len(delta_MMRs)*6)]
-        
+    
         # Modify MMR if 32 track mode is enabled
         if self.flag_32track:
             self.delta_MMRs = [delta_MMR * 2.67 if delta_MMR > 0 else delta_MMR * 0.67 for delta_MMR in self.delta_MMRs]
@@ -448,8 +467,11 @@ class LTRC_manager():
         # Round the MMR changes to the nearest integer
         self.delta_MMRs = [int(round(delta_MMR)) for delta_MMR in self.delta_MMRs]
 
-        # add the change in MMR to the old MMR
+        # Add the change in MMR to the old MMR
         self.MMR_new = np.add(self.LR_list, self.delta_MMRs)
+        
+        # Round the new MMR values to integers
+        self.MMR_new = [int(round(mmr)) for mmr in self.MMR_new]
 
     def fill_MMR_change_table(self):
         '''
@@ -591,31 +613,73 @@ class LTRC_manager():
                 self.TR_Tables.update("I92:I105", [[rank_change] for rank_change in rank_changes_list])
                 self.TR_Tables.update("H92:H105", [[up_down] for up_down in up_down_list])
 
-    def update_sheet(self):
+    def update_sheet(self, progress_callback=None):
         '''
         This method updates the MMRs of the players on the sheet
-        '''
-        # Loop through the placements and update the cells
-        for row, column, value in self.placement_updates:
-            self.Placements.update_cell(row, column, value)
         
-        # Loop through the racers and update their MMR
-        for i in range(len(self.racers)):
+        Args:
+            progress_callback: Function to report progress (percentage, message)
+        '''
+        # First update placement data
+        placement_count = len(self.placement_updates)
+        
+        if progress_callback:
+            progress_callback(25, f"Updating placement data: 0/{placement_count} entries")
             
+        # Batch update placements data to reduce API calls
+        if self.placement_updates:
+            cell_list = []
+            for idx, (row, column, value) in enumerate(self.placement_updates):
+                cell_list.append(gspread.cell.Cell(row, column, value))
+                
+                # Update progress periodically
+                if progress_callback and idx % max(1, placement_count // 10) == 0:
+                    progress = 25 + int(10 * idx / placement_count)
+                    progress_callback(progress, f"Updating placement data: {idx}/{placement_count} entries")
+            
+            # Execute the batch update
+            self.Placements.update_cells(cell_list)
+        
+        # Update progress after placements update
+        if progress_callback:
+            progress_callback(35, "Placement data updated. Starting player MMR updates...")
+        
+        # Count how many placed players we need to update
+        placed_players = [i for i, is_placed in enumerate(self.is_placed) if is_placed]
+        placed_count = len(placed_players)
+        
+        # Process placed players
+        placed_processed = 0
+        
+        for i in placed_players:
             # Get the row of the racer
             row = self.Playerdata.find(self.racers[i]).row
-
-            # Skip the unplaced racers as their MMR should not be updated
-            if not self.is_placed[i]:
-                continue
             
             # Update the MMR of the racer
             self.Playerdata.update_cell(row, 4, int(self.MMR_new[i]))
             
-    def update_placements_MMR(self):
+            # Update progress
+            placed_processed += 1
+            if progress_callback:
+                progress = 35 + int(55 * placed_processed / placed_count) if placed_count > 0 else 90
+                progress_callback(progress, f"Updating Playerdata sheet: {placed_processed}/{placed_count} players - {self.racers[i]}")
+
+    def update_placements_MMR(self, progress_callback=None):
         '''
         This method updates the MMR of the racers in the placements sheet
+        
+        Args:
+            progress_callback: Function to report progress (percentage, message)
         '''
+        # Count how many unplaced players we have
+        unplaced_count = sum(1 for is_placed in self.is_placed if not is_placed)
+        
+        if progress_callback:
+            progress_callback(0, f"Updating Placements sheet: 0/{unplaced_count} players")
+        
+        # Process each unplaced player
+        unplaced_processed = 0
+        
         for i in range(len(self.racers)):
             if not self.is_placed[i]:
                 # Get the row of the racer
@@ -624,70 +688,205 @@ class LTRC_manager():
                 # Update the MMR of the racer
                 old_MMR = int(self.Placements.cell(row, 8).value) if self.Placements.cell(row, 8).value is not None else 0
                 self.Placements.update_cell(row, 8, old_MMR + int(self.delta_MMRs[i]))
+                
+                # Update progress
+                unplaced_processed += 1
+                if progress_callback:
+                    progress = int(25 * unplaced_processed / unplaced_count) if unplaced_count > 0 else 25
+                    progress_callback(progress, f"Updating Placements sheet: {unplaced_processed}/{unplaced_count} players - {self.racers[i]}")
 
-    def clear_table(self):
+    def clear_table(self, progress_callback=None):
         '''
-        This method clears the TR tables
+        This method clears the TR tables using batch_clear to reduce API calls
+        
+        Args:
+            progress_callback: Function to report progress (percentage, message)
         '''
-
-        # Clear the Player, Score and Change columns
-
+        if progress_callback:
+            progress_callback(90, "Clearing tournament tables...")
+            
+        # Define ranges to clear based on the mode
+        ranges = []
+        
         match self.mode:
             case "FFA":
-                self.TR_Tables.update("B3:B14", [[""] for _ in range(12)])
-                self.TR_Tables.update("C3:C14", [[""] for _ in range(12)])
-                self.TR_Tables.update("F3:F14", [[""] for _ in range(12)])
+                ranges = ["B3:B14", "C3:C14", "F3:F14", "I3:I14"]
                 self.TR_Tables.update("H3:H14", [["-"] for _ in range(12)])
-                self.TR_Tables.update("I3:I14", [[""] for _ in range(12)])
             case "2vs2":
-                self.TR_Tables.update("B23:B39", [[""] for _ in range(17)])
-                self.TR_Tables.update("C23:C39", [[""] for _ in range(17)])
-                self.TR_Tables.update("F23:F39", [[""] for _ in range(17)])
+                ranges = ["B23:B39", "C23:C39", "F23:F39", "I23:I39"]
                 self.TR_Tables.update("H23:H39", [["-"] for _ in range(17)])
-                self.TR_Tables.update("I23:I39", [[""] for _ in range(17)])
             case "3vs3":
-                self.TR_Tables.update("B48:B62", [[""] for _ in range(15)])
-                self.TR_Tables.update("C48:C62", [[""] for _ in range(15)])
-                self.TR_Tables.update("F48:F62", [[""] for _ in range(15)])
+                ranges = ["B48:B62", "C48:C62", "F48:F62", "I48:I62"]
                 self.TR_Tables.update("H48:H62", [["-"] for _ in range(15)])
-                self.TR_Tables.update("I48:I62", [[""] for _ in range(15)])
             case "4vs4":
-                self.TR_Tables.update("B71:B84", [[""] for _ in range(14)])
-                self.TR_Tables.update("C71:C84", [[""] for _ in range(14)])
-                self.TR_Tables.update("F71:F84", [[""] for _ in range(14)])
+                ranges = ["B71:B84", "C71:C84", "F71:F84", "I71:I84"]
                 self.TR_Tables.update("H71:H84", [["-"] for _ in range(14)])
-                self.TR_Tables.update("I71:I84", [[""] for _ in range(14)])
             case "5vs5":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                ranges = ["B92:B104", "C92:C104", "F92:F104", "I92:I104"]
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(13)])
             case "6vs6":
-                self.TR_Tables.update("B92:B104", [[""] for _ in range(13)])
-                self.TR_Tables.update("C92:C104", [[""] for _ in range(13)])
-                self.TR_Tables.update("F92:F104", [[""] for _ in range(13)])
+                ranges = ["B92:B104", "C92:C104", "F92:F104", "I92:I104"]
                 self.TR_Tables.update("H92:H104", [["-"] for _ in range(13)])
-                self.TR_Tables.update("I92:I104", [[""] for _ in range(113)])
-
-    def LTRC_routine(self):
-        self.get_all()
-        self.find_ranking()
-        self.find_k_values()
-        self.calc_new_MMR()
         
-if __name__ == "__main__":
-    # LTRC = LTRC_manager()
-    # LTRC.LTRC_routine()
+        # Use batch_clear to clear all ranges in a single API call
+        if ranges:
+            self.TR_Tables.batch_clear(ranges)
+        
+        # Final progress update
+        if progress_callback:
+            progress_callback(100, "Sheet update complete!")
 
-    # LTRC.fill_MMR_change_table()
-    # LTRC.update_placements_MMR()
-    # # LTRC.update_sheet()
+    def get_mii(self, player):
+        """
+        Get the Mii image URL for a player
+        
+        Args:
+            player: Player name to look up
+            
+        Returns:
+            str: URL to the player's Mii image or default Mii if not found
+        """
+        # Find the player in the sheet and get their Mii
+        cell = self.Playerdata.find(player)
+        if cell and (mii := self.Playerdata.cell(cell.row, 5, value_render_option=ValueRenderOption.formula).value):
+            formula = mii
+        else:
+            # Use default Mii if player not found or no Mii set
+            formula = self.Playerdata.acell("V29", value_render_option=ValueRenderOption.formula).value
+            
+        # Extract URL from formula
+        if formula and 'IMAGE' in formula:
+            start = formula.find('"')
+            end = formula.rfind('"')
+            if start != -1 and end != -1 and start < end:
+                return formula[start+1:end]
+        else:
+            # Throw an error if the formula is not valid
+            raise ValueError(f"Invalid Mii formula for player {player}: {formula}")
 
-    # print(f"Mode: {LTRC.mode}")
-    # print(f"Racers: {LTRC.racers}")
-    # print(f"Old MMRs: {LTRC.LR_list}")
-    # print(f"Change in MMR: {LTRC.delta_MMRs}")
-    # # print(f"New MMRs: {LTRC.MMR_new}")
-
-    print("Don't run this script you big dummy!")
+    def get_results(self):
+        """
+        Gathers all the relevant data and returns a list of dictionaries with player information.
+        Each dictionary contains: name, score, mmr_change, new_mmr, mii, completion
+        Only fetches Mii images for the winning team to reduce API calls.
+        """
+        # Make sure all the necessary calculations have been performed
+        if not hasattr(self, 'racers') or not hasattr(self, 'scores') or not hasattr(self, 'delta_MMRs') or not hasattr(self, 'MMR_new'):
+            raise ValueError("Data not fully initialized.")
+            
+        results = []
+        
+        # Determine team size based on the mode
+        
+        if self.mode == "FFA":
+            team_size = 1
+        elif self.mode == "2vs2":
+            team_size = 2
+        elif self.mode == "3vs3":
+            team_size = 3
+        elif self.mode == "4vs4":
+            team_size = 4
+        elif self.mode == "5vs5":
+            team_size = 5
+        elif self.mode == "6vs6":
+            team_size = 6
+            
+        # Calculate the number of Miis to fetch (just for the winning team)
+        miis_to_fetch = team_size
+        
+        # Get all Mii URLs in a batch for the winning team
+        mii_urls = {}
+        if miis_to_fetch > 0:
+            # Get player names from the winning team
+            winning_team = self.racers[:miis_to_fetch]
+            
+            # First, try to find the row numbers for these players
+            rows = {}
+            for player in winning_team:
+                try:
+                    cell = self.Playerdata.find(player)
+                    if cell:
+                        rows[player] = cell.row
+                except:
+                    pass
+                
+            # If we found any players, get their Mii formulas in a batch
+            if rows:
+                # Prepare batch request for formulas (col 5 is the Mii column)
+                cell_ranges = []
+                for player, row in rows.items():
+                    cell_ranges.append(f"{chr(64+5)}{row}")  # Column E = 5
+                
+                # Add the default Mii cell to the batch request
+                default_mii_cell = "V29"
+                cell_ranges.append(default_mii_cell)
+                
+                # Execute batch request for formulas
+                batch_formulas = self.Playerdata.batch_get(
+                    cell_ranges, 
+                    value_render_option=ValueRenderOption.formula
+                )
+                
+                # Process the results
+                default_mii_formula = None
+                if batch_formulas and batch_formulas[-1] and batch_formulas[-1][0]:
+                    default_mii_formula = batch_formulas[-1][0][0]
+                    
+                # Extract Mii URLs from formulas
+                for i, player in enumerate(rows.keys()):
+                    if (i < len(batch_formulas) and 
+                        batch_formulas[i] and 
+                        len(batch_formulas[i]) > 0 and 
+                        len(batch_formulas[i][0]) > 0):
+                        formula = batch_formulas[i][0][0]
+                        if formula and 'IMAGE' in formula:
+                            start = formula.find('"')
+                            end = formula.rfind('"')
+                            if start != -1 and end != -1 and start < end:
+                                mii_urls[player] = formula[start+1:end]
+                
+                # Extract default Mii URL
+                default_mii_url = None
+                if default_mii_formula and 'IMAGE' in default_mii_formula:
+                    start = default_mii_formula.find('"')
+                    end = default_mii_formula.rfind('"')
+                    if start != -1 and end != -1 and start < end:
+                        default_mii_url = default_mii_formula[start+1:end]
+    
+        # Create result dictionaries for each player
+        for i, name in enumerate(self.racers):
+            # Get the score
+            score = self.scores[i]
+            
+            # Get the MMR change
+            mmr_change = self.delta_MMRs[i]
+            
+            # Get the new MMR
+            new_mmr = int(self.MMR_new[i])
+            
+            # Get placement completion status
+            completion = self.completion[i]
+            
+            # Get Mii URL for winning team members (or None for others)
+            mii_url = None
+            if i < miis_to_fetch:
+                # Try to get from our batch-loaded URLs
+                if name in mii_urls:
+                    mii_url = mii_urls[name]
+                else:
+                    # Fall back to default Mii
+                    mii_url = default_mii_url
+        
+            # Create the player dictionary with all information
+            player = {
+                "name": name,
+                "score": score,
+                "mmr_change": mmr_change,
+                "new_mmr": new_mmr,
+                "mii": mii_url,
+                "completion": completion
+            }
+            
+            results.append(player)
+    
+        return results

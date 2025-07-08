@@ -1,2 +1,0 @@
-sheetname=Copy of LTRC
-style=Skyline (Nightfall).qss
