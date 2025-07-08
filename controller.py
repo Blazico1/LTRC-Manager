@@ -23,6 +23,48 @@ class ImageGeneratorThread(QThread):
         pil_image = self.model.generate_image(self.subtitle, progress_callback)
         self.image_generated.emit(pil_image)
 
+class SheetUpdateThread(QThread):
+    # Define signals for progress updates and completion
+    progress_updated = pyqtSignal(int, str)
+    update_completed = pyqtSignal()
+    
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        
+    def run(self):
+        # Define a progress callback function to pass to the update_sheet method
+        def progress_callback(value, message):
+            self.progress_updated.emit(value, message)
+            
+        # Update the sheet with progress tracking
+        self.model.update_sheet(progress_callback)
+        self.update_completed.emit()
+
+class TableDataThread(QThread):
+    # Define signals for progress updates and completion
+    progress_updated = pyqtSignal(int, str)
+    data_loaded = pyqtSignal(object)
+    
+    def __init__(self, model, mode):
+        super().__init__()
+        self.model = model
+        self.mode = mode
+        
+    def run(self):
+        # Define a progress callback function to pass to the get_table_data method
+        def progress_callback(value, message):
+            self.progress_updated.emit(value, message)
+            
+        # Set the mode first
+        self.model.set_mode(self.mode)
+        
+        # Get table data with progress tracking
+        table_data = self.model.get_table_data(progress_callback)
+        
+        # Signal that data is loaded
+        self.data_loaded.emit(table_data)
+
 class LTRCController:
     def __init__(self, model, view):
         self.model = model
@@ -38,10 +80,21 @@ class LTRCController:
 
     def show_table_screen(self):
         mode = self.view.dropdown.currentText()
-        self.model.set_mode(mode)
-        table_data = self.model.get_table_data()
+        
+        # Show loading screen
+        self.view.show_loading_screen(f"Loading {mode} Tournament Data...")
+        
+        # Create and start a worker thread for data loading
+        self.data_thread = TableDataThread(self.model, mode)
+        self.data_thread.progress_updated.connect(self.view.update_progress)
+        self.data_thread.data_loaded.connect(self.on_data_loaded)
+        self.data_thread.start()
+    
+    def on_data_loaded(self, table_data):
+        # Show the table screen with the loaded data
         self.view.show_table_screen(table_data)
-
+        
+        # Connect buttons for the table screen
         self.view.refresh_button.clicked.connect(self.restart)
         self.view.continue_button.clicked.connect(self.show_image_gen_screen)
     
@@ -67,7 +120,7 @@ class LTRCController:
         self.image_thread.start()
     
     def start_image_generation_with_discord(self):
-        ...
+        pass
     
     def on_image_generated(self, pil_image):
         # Store the PIL image in the view for display and clipboard operations
@@ -80,20 +133,6 @@ class LTRCController:
         
         # Continue to the write screen after image generation
         self.show_write_screen()
-    
-    def on_image_generated_with_discord(self, pil_image):
-        # Store the PIL image in the view
-        self.view.pil_image = pil_image
-        self.view.image_generated = True
-        
-        # Convert PIL image to QPixmap for display
-        q_image = ImageQt(pil_image)
-        self.view.original_pixmap = QPixmap.fromImage(q_image)
-        
-        # Here we would handle Discord upload
-        # For now, just show a message in the progress screen
-        self.view.update_progress(100, "Discord upload would happen here (not yet implemented)")
-        QTimer.singleShot(2000, self.show_write_screen)
 
     def copy_image_to_clipboard(self):
         """Copy the generated image to clipboard"""
@@ -148,8 +187,14 @@ class LTRCController:
                 self.view.save_button.clicked.connect(self.save_image)
 
     def show_write_loading(self):
+        # Show the write loading screen with progress bar
         self.view.show_write_loading()
-        QTimer.singleShot(100, self.show_end_screen)
+        
+        # Create and start a worker thread for sheet updating
+        self.update_thread = SheetUpdateThread(self.model)
+        self.update_thread.progress_updated.connect(self.view.update_progress)
+        self.update_thread.update_completed.connect(self.show_end_screen)
+        self.update_thread.start()
 
     def show_end_screen(self):
         self.model.update_sheet()
@@ -158,6 +203,52 @@ class LTRCController:
 
     def toggle_32track(self, enabled):
         self.model.toggle_32track(enabled)
+        self.view.save_button.setText("Image Saved!")
+        
+        # Reset the button text after 2 seconds
+        QTimer.singleShot(2000, lambda: self.view.save_button.setText("Save Image"))
+
+    def show_write_screen(self):
+        self.model.write_table()
+        self.view.show_write_screen()
+        
+        # Connect the buttons
+        self.view.write_button.clicked.connect(self.show_write_loading)
+        
+        # Connect the image-related buttons if image was generated
+        if self.view.image_generated:
+            if hasattr(self.view, 'copy_button'):
+                self.view.copy_button.clicked.connect(self.copy_image_to_clipboard)
+            if hasattr(self.view, 'save_button'):
+                self.view.save_button.clicked.connect(self.save_image)
+
+    def show_write_loading(self):
+        # Show the write loading screen with progress bar
+        self.view.show_write_loading()
+        
+        # Create and start a worker thread for sheet updating
+        self.update_thread = SheetUpdateThread(self.model)
+        self.update_thread.progress_updated.connect(self.view.update_progress)
+        self.update_thread.update_completed.connect(self.show_end_screen)
+        self.update_thread.start()
+
+    def show_end_screen(self):
+        self.model.update_sheet()
+        self.view.show_end_screen()
+        self.view.restart_button.clicked.connect(self.restart)
+
+    def toggle_32track(self, enabled):
+        self.model.toggle_32track(enabled)
+    def show_write_loading(self):
+        # Show the write loading screen with progress bar
+        self.view.show_write_loading()
+        
+        # Create and start a worker thread for sheet updating
+        self.update_thread = SheetUpdateThread(self.model)
+        self.update_thread.progress_updated.connect(self.view.update_progress)
+        self.update_thread.update_completed.connect(self.show_end_screen)
+        self.update_thread.start()
+
     def show_end_screen(self):
         self.model.update_sheet()
         self.view.show_end_screen()

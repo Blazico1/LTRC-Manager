@@ -51,6 +51,94 @@ class LTRCView(QMainWindow):
         self.layout.addWidget(self.dropdown)
         self.layout.addWidget(self.checkbox)
         self.layout.addWidget(self.start_button)
+        
+    def show_loading_screen(self, title_text="Loading...", initial_status="Initialising..."):
+        """
+        Show a loading screen with progress bar and status label
+        
+        Args:
+            title_text: Title to display at the top of the loading screen
+            initial_status: Initial message to display in the status label
+        """
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.layout = QVBoxLayout(self.central_widget)
+        
+        # Add some vertical space
+        self.layout.addStretch()
+        
+        # Create title label
+        self.title_label = QLabel(title_text)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = self.title_label.font()
+        font.setPointSize(16)
+        self.title_label.setFont(font)
+        self.layout.addWidget(self.title_label)
+        
+        # Create progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.layout.addWidget(self.progress_bar)
+        
+        # Create status label with consistent styling
+        self.status_label = QLabel(initial_status)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setWordWrap(True)
+        self.status_label.setMinimumHeight(60)  # Allow more height for multi-line messages
+        self.layout.addWidget(self.status_label)
+        
+        # Add some vertical space
+        self.layout.addStretch()
+        
+        # Process events immediately to show the loading screen
+        QCoreApplication.processEvents()
+
+    def update_progress(self, value, message=None):
+        """Update the progress bar and status message for all screens"""
+        # Update progress bar if it exists
+        if hasattr(self, 'progress_bar'):
+            self.progress_bar.setValue(value)
+        
+        # Update status text if message is provided
+        if message and hasattr(self, 'status_label'):
+            self.status_label.setText(message)
+            QCoreApplication.processEvents()  # Force UI update immediately
+
+    def show_main_screen(self):
+        """Show the main starting screen after loading"""
+        # Clear the existing layout
+        for i in reversed(range(self.layout.count())):
+            item = self.layout.itemAt(i)
+            if item.widget():
+                item.widget().setParent(None)
+        
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.layout = QVBoxLayout(self.central_widget)
+
+        self.start_button = QPushButton("Start")
+        self.dropdown = QComboBox()
+        self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
+        self.checkbox = QCheckBox("32 track")
+
+        self.layout.addWidget(self.dropdown)
+        self.layout.addWidget(self.checkbox)
+        self.layout.addWidget(self.start_button)
+        
+    def restart(self):
+        # Clear the existing layout
+        for i in reversed(range(self.layout.count())):
+            widget = self.layout.itemAt(i).widget()
+            if widget is not None:
+                widget.setParent(None)
+
+        # Show the main screen again
+        self.show_main_screen()
+        
+        # Reset the image generation flag and path
+        self.image_generated = False
+        self.image_path = None
 
     def show_table_screen(self, table_data):
         # Clear the existing layout
@@ -74,8 +162,7 @@ class LTRCView(QMainWindow):
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
 
         # Set the headers of the table
-        self.table.setHorizontalHeaderLabels(["Player", "Score", "MMR", "Change", "New Rating"])  # Set the header labels
-
+        self.table.setHorizontalHeaderLabels(["Player", "Score", "MMR", "Change", "New Rating"])
 
         # Fill the table with data
         for i in range(len(racers)):
@@ -114,7 +201,7 @@ class LTRCView(QMainWindow):
 
         # Set the widget as the central widget
         self.setCentralWidget(self.widget)
-     
+        
     def show_image_gen_screen(self):
         # Create a widget to hold the text, input field, and buttons
         self.widget = QWidget(self)
@@ -162,37 +249,13 @@ class LTRCView(QMainWindow):
         self.setCentralWidget(self.widget)
 
     def show_image_progress_screen(self):
-        # Create a widget to hold the progress bar and status text
-        self.widget = QWidget(self)
-        self.layout = QVBoxLayout(self.widget)
+        """Show loading screen for image generation"""
+        self.show_loading_screen("Generating Image...", "Starting image generation...")
 
-        # Create the header text
-        self.header_text = QLabel("Generating Image...", self)
-        self.header_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.header_text)
+    def show_write_loading(self):
+        """Show loading screen for sheet update"""
+        self.show_loading_screen("Updating the sheet...", "Starting update process...")
 
-        # Create progress bar
-        self.progress_bar = QProgressBar(self)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.layout.addWidget(self.progress_bar)
-
-        # Create status text
-        self.status_text = QLabel("Starting image generation...", self)
-        self.status_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.status_text)
-
-        # Set the widget as the central widget
-        self.setCentralWidget(self.widget)
-
-    def update_progress(self, value, message=None):
-        """Update the progress bar and status message"""
-        if hasattr(self, 'progress_bar'):
-            self.progress_bar.setValue(value)
-            
-        if hasattr(self, 'status_text') and message:
-            self.status_text.setText(message)
-     
     def show_write_screen(self):
         # Create a widget to hold the text and button
         self.widget = QWidget(self)
@@ -238,6 +301,7 @@ class LTRCView(QMainWindow):
             self.final_text = QLabel("Make the table screenshot before continuing!\n\nWrite new MMR values to the sheet?", self)
             self.layout.addWidget(self.final_text)
 
+        # Create buttons
         # Create the "Close" button
         self.close_button = QPushButton("Close", self)
         self.close_button.clicked.connect(QCoreApplication.quit)
@@ -280,19 +344,6 @@ class LTRCView(QMainWindow):
         
         # Call the parent class's resizeEvent
         super().resizeEvent(event)
-
-    def show_write_loading(self):
-        # Create a widget to hold the text
-        self.widget = QWidget(self)
-        self.layout = QVBoxLayout(self.widget)
-
-        # Create a text widget
-        self.text = QLabel("Updating the sheet...", self)
-        self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.text)
-
-        # Set the widget as the central widget
-        self.setCentralWidget(self.widget)
 
     def show_end_screen(self):
         # Create a widget to hold the text

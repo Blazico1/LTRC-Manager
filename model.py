@@ -16,8 +16,18 @@ class LTRCModel:
     def toggle_32track(self, enabled):
         self.LTRC.flag_32track = enabled
 
-    def get_table_data(self):
-        self.LTRC.LTRC_routine()
+    def get_table_data(self, progress_callback=None):
+        """
+        Retrieves table data with progress updates
+        
+        Args:
+            progress_callback: Optional function to report loading progress
+        
+        Returns:
+            Tuple containing racers, scores, MMRs, deltas, new_MMRs
+        """
+        # Pass the progress callback to the LTRC routine
+        self.LTRC.LTRC_routine(progress_callback)
 
         racers = self.LTRC.racers
         scores = [f"{score}" for score in self.LTRC.scores]
@@ -25,7 +35,7 @@ class LTRCModel:
 
         deltas = [f"{delta}" for delta in self.LTRC.delta_MMRs]
         new_MMRs = [f"{MMR}" for MMR in self.LTRC.MMR_new]
-
+        
         return racers, scores, MMRs, deltas, new_MMRs
 
     def write_table(self):
@@ -33,10 +43,17 @@ class LTRCModel:
         self.LTRC.fill_MMR_change_table()
         self.LTRC.fill_rank_change_table()
 
-    def update_sheet(self):
-        self.LTRC.update_placements_MMR()
-        self.LTRC.update_sheet()
-        self.LTRC.clear_table()
+    def update_sheet(self, progress_callback=None):
+        """
+        Update the sheet with detailed progress tracking
+        
+        Args:
+            progress_callback: Optional callback function for progress updates
+        """
+        # Pass the progress callback to the LTRC manager for detailed updates
+        self.LTRC.update_placements_MMR(progress_callback)
+        self.LTRC.update_sheet(progress_callback)
+        self.LTRC.clear_table(progress_callback)
         
     def generate_image(self, subtitle, progress_callback=None):
         """

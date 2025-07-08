@@ -852,13 +852,15 @@ class LTRCImageGenerator:
         # Reset progress tracking
         self.completed_steps = 0
         
-        # Calculate total steps for progress tracking
-        # 1 step for preloading, 1 for header, 1 for podium per team, 1 for regular players,
-        # 1 for shadow effect, 1 for background, and 1 for final composition
-        self.total_steps = 7
+        # Simplified progress tracking with fewer steps:
+        # 1. Asset preloading (including Miis)
+        # 2. Image rendering (all rendering steps combined)
+        # 3. Final processing and composition
+        self.total_steps = 3
         
-        # Add steps for each player (1 for loading Mii, 1 for rendering info)
-        self.total_steps += len(results) * 2
+        # Add steps for Mii loading (one per player with a Mii)
+        mii_count = sum(1 for player in results if player.get("mii") is not None)
+        self.total_steps += mii_count
         
         # Preload common assets (rank icons, direction icons)
         self.preload_common_assets()
@@ -867,7 +869,7 @@ class LTRCImageGenerator:
         # Prefetch all Mii images
         mii_urls = []
         for player in results:
-            if player["mii"] is not None:
+            if player.get("mii") is not None:
                 mii_urls.append(player["mii"]) 
                 
         if mii_urls:
@@ -879,21 +881,17 @@ class LTRCImageGenerator:
             elapsed = time.time() - prefetch_start
             print(f"Prefetched {len(mii_urls)} Mii images in {elapsed:.2f} seconds")
         
+        # Update progress for starting the rendering process
+        self._update_progress(0, "Rendering tournament results image...")
+        
         # Create a transparent canvas for drawing content
         content_img = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
         
-        # Add header (title and subtitle)
+        # Combine all rendering steps
         content_img = self._render_header(content_img, subtitle)
-        self._update_progress(1, "Rendered header")
-        
-        # Render podium section
         content_img = self._render_podium(content_img, results)
-        self._update_progress(1, "Rendered podium")
-        
-        # Render regular players if there are more than podium count
         if len(results) > self.podium_count:
             content_img = self._render_regular_players(content_img, results)
-        self._update_progress(1, "Rendered regular players")
         
         # Get shadow parameters
         shadow_offset = tuple(self.header_config['shadow_offset'])
@@ -901,11 +899,12 @@ class LTRCImageGenerator:
         
         # Apply shadow effect to the entire content
         shadowed_img = self._apply_shadow_to_image(content_img, shadow_color, shadow_offset)
-        self._update_progress(1, "Applied shadow effect")
         
-        # Create background
+        # Complete the rendering step
+        self._update_progress(1, "Image rendered successfully")
+        
+        # Create background and final composition (final step)
         background = self._create_base_image()
-        self._update_progress(1, "Created background")
         
         # Create final image by combining shadowed content with background
         final_img = Image.new('RGBA', background.size, (0, 0, 0, 0))
@@ -917,7 +916,7 @@ class LTRCImageGenerator:
         
         # Paste the shadowed content onto the background
         final_img.paste(shadowed_img, (x_pos, y_pos), shadowed_img)
-        self._update_progress(1, "Completed final composition")
+        self._update_progress(1, "Final image composition completed")
         
         # Report total generation time
         elapsed_time = time.time() - start_time

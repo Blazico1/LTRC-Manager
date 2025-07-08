@@ -21,6 +21,7 @@ def main():
     model = LTRCModel()
     view = LTRCView()
     controller = LTRCController(model, view)
+    
     view.show()
     sys.exit(app.exec())
 
