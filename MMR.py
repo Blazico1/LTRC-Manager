@@ -77,6 +77,8 @@ class LTRC_manager():
             
         # Toggle flag for 32 track mode
         self.flag_32track = False
+        # Toggle flag for 200cc mode
+        self.flag_200cc = False
 
     def _update_progress(self, value, message=None):
         """Update the progress callback if provided"""
@@ -242,6 +244,7 @@ class LTRC_manager():
                     'point3': row[5] if len(row) > 5 and row[5] else None,
                     'mmr_accum': row[7] if len(row) > 7 and row[7] else "0"
                 }
+        self.placements_dict = placements_dict
 
         # Find the first empty row
         empty_row = 5
@@ -464,6 +467,10 @@ class LTRC_manager():
         if self.flag_32track:
             self.delta_MMRs = [delta_MMR * 2.67 if delta_MMR > 0 else delta_MMR * 0.67 for delta_MMR in self.delta_MMRs]
         
+        # Modify MMR if 200cc mode is enabled - halve losses only
+        if self.flag_200cc:
+            self.delta_MMRs = [delta_MMR if delta_MMR > 0 else delta_MMR * 0.5 for delta_MMR in self.delta_MMRs]
+        
         # Round the MMR changes to the nearest integer
         self.delta_MMRs = [int(round(delta_MMR)) for delta_MMR in self.delta_MMRs]
 
@@ -623,26 +630,14 @@ class LTRC_manager():
         # First update placement data
         placement_count = len(self.placement_updates)
         
-        if progress_callback:
-            progress_callback(25, f"Updating placement data: 0/{placement_count} entries")
-            
         # Batch update placements data to reduce API calls
         if self.placement_updates:
             cell_list = []
             for idx, (row, column, value) in enumerate(self.placement_updates):
                 cell_list.append(gspread.cell.Cell(row, column, value))
                 
-                # Update progress periodically
-                if progress_callback and idx % max(1, placement_count // 10) == 0:
-                    progress = 25 + int(10 * idx / placement_count)
-                    progress_callback(progress, f"Updating placement data: {idx}/{placement_count} entries")
-            
-            # Execute the batch update
-            self.Placements.update_cells(cell_list)
-        
-        # Update progress after placements update
-        if progress_callback:
-            progress_callback(35, "Placement data updated. Starting player MMR updates...")
+        # Execute the batch update
+        self.Placements.update_cells(cell_list)
         
         # Count how many placed players we need to update
         placed_players = [i for i, is_placed in enumerate(self.is_placed) if is_placed]
@@ -674,26 +669,34 @@ class LTRC_manager():
         # Count how many unplaced players we have
         unplaced_count = sum(1 for is_placed in self.is_placed if not is_placed)
         
-        if progress_callback:
-            progress_callback(0, f"Updating Placements sheet: 0/{unplaced_count} players")
+        # Prepare batch update list
+        cell_updates = []
         
-        # Process each unplaced player
         unplaced_processed = 0
         
-        for i in range(len(self.racers)):
-            if not self.is_placed[i]:
-                # Get the row of the racer
-                row = self.Placements.find(self.racers[i]).row
-
-                # Update the MMR of the racer
-                old_MMR = int(self.Placements.cell(row, 8).value) if self.Placements.cell(row, 8).value is not None else 0
-                self.Placements.update_cell(row, 8, old_MMR + int(self.delta_MMRs[i]))
+        for i, completion in enumerate(self.completion):
+            if completion:
+                racer = self.racers[i]
+                
+                # Use the cached dictionary to get the row and old MMR
+                row = self.placements_dict[racer]['row']
+                old_mmr = int(self.placements_dict[racer]['mmr_accum']) if self.placements_dict[racer]['mmr_accum'] else 0
+                
+                # Calculate the new accumulated MMR
+                new_mmr = old_mmr + int(self.delta_MMRs[i])
+                
+                # Add to batch update
+                cell_updates.append(gspread.cell.Cell(row, 8, new_mmr))
                 
                 # Update progress
                 unplaced_processed += 1
                 if progress_callback:
                     progress = int(25 * unplaced_processed / unplaced_count) if unplaced_count > 0 else 25
-                    progress_callback(progress, f"Updating Placements sheet: {unplaced_processed}/{unplaced_count} players - {self.racers[i]}")
+                    progress_callback(progress, f"Updating Placements sheet: {unplaced_processed}/{unplaced_count} players - {racer}")
+        
+        # Execute the batch update if there are any updates to make
+        if cell_updates:
+            self.Placements.update_cells(cell_updates)
 
     def clear_table(self, progress_callback=None):
         '''
@@ -890,3 +893,29 @@ class LTRC_manager():
             results.append(player)
     
         return results
+    
+if __name__ == "__main__":
+    # Create an instance of the LTRC manager
+    LTRC = LTRC_manager()
+    
+    try:
+        # Run the main processing routine without progress tracking
+        LTRC.LTRC_routine()
+        
+        # Fill the tables with calculated data
+        LTRC.fill_MMR_change_table()
+        LTRC.fill_rank_change_table()
+        
+        # Update the player data in the sheets
+        LTRC.update_sheet()
+        LTRC.update_placements_MMR()
+        
+        # Retrieve and display results
+        results = LTRC.get_results()
+        
+        print("\nProcessing complete. Results summary:")
+        for i, player in enumerate(results[:3]):  # Show top 3 players
+            print(f"{i+1}. {player['name']}: {player['score']} points, MMR change: {player['mmr_change']}")
+            
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
