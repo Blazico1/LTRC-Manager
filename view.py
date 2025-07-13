@@ -8,7 +8,7 @@ import os
 class LTRCView(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LTRC Manager v0.5")
+        self.setWindowTitle("LTRC Manager v0.5.1")
         self.resize(800, 600)
 
         self.central_widget = QWidget()
