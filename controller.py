@@ -71,12 +71,19 @@ class LTRCController:
         self.view = view
 
         self.view.start_button.clicked.connect(self.show_table_screen)
-        self.view.checkbox.toggled.connect(self.toggle_32track)
+        self.view.cb_32track.toggled.connect(self.toggle_32track)
+        self.view.cb_200cc.toggled.connect(self.toggle_200cc)
 
     def restart(self):
+        # Store checkbox states before restart
+        self.model.toggle_32track(False)
+        self.model.toggle_200cc(False)
+        
         self.view.restart()
+        
         self.view.start_button.clicked.connect(self.show_table_screen)
-        self.view.checkbox.toggled.connect(self.toggle_32track)
+        self.view.cb_32track.toggled.connect(self.toggle_32track)
+        self.view.cb_200cc.toggled.connect(self.toggle_200cc)
 
     def show_table_screen(self):
         mode = self.view.dropdown.currentText()
@@ -203,56 +210,6 @@ class LTRCController:
 
     def toggle_32track(self, enabled):
         self.model.toggle_32track(enabled)
-        self.view.save_button.setText("Image Saved!")
         
-        # Reset the button text after 2 seconds
-        QTimer.singleShot(2000, lambda: self.view.save_button.setText("Save Image"))
-
-    def show_write_screen(self):
-        self.model.write_table()
-        self.view.show_write_screen()
-        
-        # Connect the buttons
-        self.view.write_button.clicked.connect(self.show_write_loading)
-        
-        # Connect the image-related buttons if image was generated
-        if self.view.image_generated:
-            if hasattr(self.view, 'copy_button'):
-                self.view.copy_button.clicked.connect(self.copy_image_to_clipboard)
-            if hasattr(self.view, 'save_button'):
-                self.view.save_button.clicked.connect(self.save_image)
-
-    def show_write_loading(self):
-        # Show the write loading screen with progress bar
-        self.view.show_write_loading()
-        
-        # Create and start a worker thread for sheet updating
-        self.update_thread = SheetUpdateThread(self.model)
-        self.update_thread.progress_updated.connect(self.view.update_progress)
-        self.update_thread.update_completed.connect(self.show_end_screen)
-        self.update_thread.start()
-
-    def show_end_screen(self):
-        self.model.update_sheet()
-        self.view.show_end_screen()
-        self.view.restart_button.clicked.connect(self.restart)
-
-    def toggle_32track(self, enabled):
-        self.model.toggle_32track(enabled)
-    def show_write_loading(self):
-        # Show the write loading screen with progress bar
-        self.view.show_write_loading()
-        
-        # Create and start a worker thread for sheet updating
-        self.update_thread = SheetUpdateThread(self.model)
-        self.update_thread.progress_updated.connect(self.view.update_progress)
-        self.update_thread.update_completed.connect(self.show_end_screen)
-        self.update_thread.start()
-
-    def show_end_screen(self):
-        self.model.update_sheet()
-        self.view.show_end_screen()
-        self.view.restart_button.clicked.connect(self.restart)
-
-    def toggle_32track(self, enabled):
-        self.model.toggle_32track(enabled)
+    def toggle_200cc(self, enabled):
+        self.model.toggle_200cc(enabled)

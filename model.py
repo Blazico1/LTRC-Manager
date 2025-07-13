@@ -18,6 +18,9 @@ class LTRCModel:
     def toggle_32track(self, enabled):
         self.LTRC.flag_32track = enabled
 
+    def toggle_200cc(self, enabled):
+        self.LTRC.flag_200cc = enabled
+
     def get_table_data(self, progress_callback=None):
         """
         Retrieves table data with progress updates
