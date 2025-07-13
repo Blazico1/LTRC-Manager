@@ -19,9 +19,33 @@ class ImageGeneratorThread(QThread):
         # Generate the image and get the PIL image object
         def progress_callback(value, message):
             self.progress_updated.emit(value, message)
+        
+        # Generate custom title based on enabled options
+        custom_title = self.create_custom_title()
             
-        pil_image = self.model.generate_image(self.subtitle, progress_callback)
+        pil_image = self.model.generate_image(self.subtitle, progress_callback, custom_title)
         self.image_generated.emit(pil_image)
+        
+    def create_custom_title(self):
+        """Create a custom title based on enabled options"""
+        # Get the current mode from the model
+        format_type = self.model.LTRC.mode
+        title_parts = []
+        
+        if self.model.flag_32track:
+            title_parts.append("32 Track")
+            
+        if self.model.flag_200cc:
+            title_parts.append("200cc")
+            
+        if self.model.flag_ott:
+            title_parts.append("OTT")
+            
+        # Add the format type and "Results"
+        title_parts.append(f"{format_type} Results")
+        
+        # Join all parts with spaces
+        return " ".join(title_parts)
 
 class SheetUpdateThread(QThread):
     # Define signals for progress updates and completion
@@ -71,12 +95,22 @@ class LTRCController:
         self.view = view
 
         self.view.start_button.clicked.connect(self.show_table_screen)
-        self.view.checkbox.toggled.connect(self.toggle_32track)
+        self.view.cb_32track.toggled.connect(self.toggle_32track)
+        self.view.cb_200cc.toggled.connect(self.toggle_200cc)
+        self.view.cb_ott.toggled.connect(self.toggle_ott)
 
     def restart(self):
+        # Store checkbox states before restart
+        self.model.toggle_32track(False)
+        self.model.toggle_200cc(False)
+        self.model.toggle_ott(False)
+        
         self.view.restart()
+        
         self.view.start_button.clicked.connect(self.show_table_screen)
-        self.view.checkbox.toggled.connect(self.toggle_32track)
+        self.view.cb_32track.toggled.connect(self.toggle_32track)
+        self.view.cb_200cc.toggled.connect(self.toggle_200cc)
+        self.view.cb_ott.toggled.connect(self.toggle_ott)
 
     def show_table_screen(self):
         mode = self.view.dropdown.currentText()
@@ -203,56 +237,9 @@ class LTRCController:
 
     def toggle_32track(self, enabled):
         self.model.toggle_32track(enabled)
-        self.view.save_button.setText("Image Saved!")
         
-        # Reset the button text after 2 seconds
-        QTimer.singleShot(2000, lambda: self.view.save_button.setText("Save Image"))
-
-    def show_write_screen(self):
-        self.model.write_table()
-        self.view.show_write_screen()
+    def toggle_200cc(self, enabled):
+        self.model.toggle_200cc(enabled)
         
-        # Connect the buttons
-        self.view.write_button.clicked.connect(self.show_write_loading)
-        
-        # Connect the image-related buttons if image was generated
-        if self.view.image_generated:
-            if hasattr(self.view, 'copy_button'):
-                self.view.copy_button.clicked.connect(self.copy_image_to_clipboard)
-            if hasattr(self.view, 'save_button'):
-                self.view.save_button.clicked.connect(self.save_image)
-
-    def show_write_loading(self):
-        # Show the write loading screen with progress bar
-        self.view.show_write_loading()
-        
-        # Create and start a worker thread for sheet updating
-        self.update_thread = SheetUpdateThread(self.model)
-        self.update_thread.progress_updated.connect(self.view.update_progress)
-        self.update_thread.update_completed.connect(self.show_end_screen)
-        self.update_thread.start()
-
-    def show_end_screen(self):
-        self.model.update_sheet()
-        self.view.show_end_screen()
-        self.view.restart_button.clicked.connect(self.restart)
-
-    def toggle_32track(self, enabled):
-        self.model.toggle_32track(enabled)
-    def show_write_loading(self):
-        # Show the write loading screen with progress bar
-        self.view.show_write_loading()
-        
-        # Create and start a worker thread for sheet updating
-        self.update_thread = SheetUpdateThread(self.model)
-        self.update_thread.progress_updated.connect(self.view.update_progress)
-        self.update_thread.update_completed.connect(self.show_end_screen)
-        self.update_thread.start()
-
-    def show_end_screen(self):
-        self.model.update_sheet()
-        self.view.show_end_screen()
-        self.view.restart_button.clicked.connect(self.restart)
-
-    def toggle_32track(self, enabled):
-        self.model.toggle_32track(enabled)
+    def toggle_ott(self, enabled):
+        self.model.toggle_ott(enabled)

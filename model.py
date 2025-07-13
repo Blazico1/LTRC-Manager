@@ -11,12 +11,24 @@ class LTRCModel:
     def __init__(self):
         self.LTRC = LTRC_manager()
         self.generated_image = None
+        self.flag_32track = False
+        self.flag_200cc = False
+        self.flag_ott = False
 
     def set_mode(self, mode):
         self.LTRC.mode = mode
 
     def toggle_32track(self, enabled):
+        self.flag_32track = enabled
         self.LTRC.flag_32track = enabled
+
+    def toggle_200cc(self, enabled):
+        self.flag_200cc = enabled
+        self.LTRC.flag_200cc = enabled
+
+    def toggle_ott(self, enabled):
+        self.flag_ott = enabled
+        
 
     def get_table_data(self, progress_callback=None):
         """
@@ -57,13 +69,14 @@ class LTRCModel:
         self.LTRC.update_sheet(progress_callback)
         self.LTRC.clear_table(progress_callback)
         
-    def generate_image(self, subtitle, progress_callback=None):
+    def generate_image(self, subtitle, progress_callback=None, custom_title=None):
         """
         Generate an image with the tournament results
         
         Args:
             subtitle: Text to display as subtitle
             progress_callback: Function to call with progress updates
+            custom_title: Optional custom title text
             
         Returns:
             PIL.Image: The generated image
@@ -104,8 +117,8 @@ class LTRCModel:
         # Get the player results from LTRC
         results = self.LTRC.get_results()
         
-        # Generate the image
-        self.generated_image = generator.generate(results, subtitle)
+        # Generate the image with custom title
+        self.generated_image = generator.generate(results, subtitle, custom_title)
         
         # Return the image object
         return self.generated_image

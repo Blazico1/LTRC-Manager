@@ -8,7 +8,7 @@ import os
 class LTRCView(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LTRC Manager v0.5")
+        self.setWindowTitle("LTRC Manager v0.5.1")
         self.resize(800, 600)
 
         self.central_widget = QWidget()
@@ -18,14 +18,18 @@ class LTRCView(QMainWindow):
         self.start_button = QPushButton("Start")
         self.dropdown = QComboBox()
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
-        self.checkbox = QCheckBox("32 track")
+        self.cb_32track = QCheckBox("32 Track")
+        self.cb_200cc = QCheckBox("200cc")
+        self.cb_ott = QCheckBox("OTT")
         
         # Initialize the image generation flag
         self.image_generated = False
         self.image_path = None
 
         self.layout.addWidget(self.dropdown)
-        self.layout.addWidget(self.checkbox)
+        self.layout.addWidget(self.cb_32track)
+        self.layout.addWidget(self.cb_200cc)
+        self.layout.addWidget(self.cb_ott)
         self.layout.addWidget(self.start_button)
 
     def restart(self):
@@ -42,14 +46,18 @@ class LTRCView(QMainWindow):
         self.start_button = QPushButton("Start")
         self.dropdown = QComboBox()
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
-        self.checkbox = QCheckBox("32 track")
+        self.cb_32track = QCheckBox("32 Track")
+        self.cb_200cc = QCheckBox("200cc")
+        self.cb_ott = QCheckBox("OTT")
         
         # Reset the image generation flag and path
         self.image_generated = False
         self.image_path = None
 
         self.layout.addWidget(self.dropdown)
-        self.layout.addWidget(self.checkbox)
+        self.layout.addWidget(self.cb_32track)
+        self.layout.addWidget(self.cb_200cc)
+        self.layout.addWidget(self.cb_ott)
         self.layout.addWidget(self.start_button)
         
     def show_loading_screen(self, title_text="Loading...", initial_status="Initialising..."):
@@ -120,25 +128,13 @@ class LTRCView(QMainWindow):
         self.start_button = QPushButton("Start")
         self.dropdown = QComboBox()
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
-        self.checkbox = QCheckBox("32 track")
+        self.cb_32track = QCheckBox("32 Track")
+        self.cb_200cc = QCheckBox("200cc")
 
         self.layout.addWidget(self.dropdown)
-        self.layout.addWidget(self.checkbox)
+        self.cb_32track = QCheckBox("32 Track")
+        self.cb_200cc = QCheckBox("200cc")
         self.layout.addWidget(self.start_button)
-        
-    def restart(self):
-        # Clear the existing layout
-        for i in reversed(range(self.layout.count())):
-            widget = self.layout.itemAt(i).widget()
-            if widget is not None:
-                widget.setParent(None)
-
-        # Show the main screen again
-        self.show_main_screen()
-        
-        # Reset the image generation flag and path
-        self.image_generated = False
-        self.image_path = None
 
     def show_table_screen(self, table_data):
         # Clear the existing layout
