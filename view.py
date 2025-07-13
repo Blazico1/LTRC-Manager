@@ -20,6 +20,7 @@ class LTRCView(QMainWindow):
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
         self.cb_32track = QCheckBox("32 Track")
         self.cb_200cc = QCheckBox("200cc")
+        self.cb_ott = QCheckBox("OTT")
         
         # Initialize the image generation flag
         self.image_generated = False
@@ -28,6 +29,7 @@ class LTRCView(QMainWindow):
         self.layout.addWidget(self.dropdown)
         self.layout.addWidget(self.cb_32track)
         self.layout.addWidget(self.cb_200cc)
+        self.layout.addWidget(self.cb_ott)
         self.layout.addWidget(self.start_button)
 
     def restart(self):
@@ -46,6 +48,7 @@ class LTRCView(QMainWindow):
         self.dropdown.addItems(["FFA", "2vs2", "3vs3", "4vs4", "5vs5", "6vs6"])
         self.cb_32track = QCheckBox("32 Track")
         self.cb_200cc = QCheckBox("200cc")
+        self.cb_ott = QCheckBox("OTT")
         
         # Reset the image generation flag and path
         self.image_generated = False
@@ -54,6 +57,7 @@ class LTRCView(QMainWindow):
         self.layout.addWidget(self.dropdown)
         self.layout.addWidget(self.cb_32track)
         self.layout.addWidget(self.cb_200cc)
+        self.layout.addWidget(self.cb_ott)
         self.layout.addWidget(self.start_button)
         
     def show_loading_screen(self, title_text="Loading...", initial_status="Initialising..."):

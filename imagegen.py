@@ -1,9 +1,7 @@
-import json
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageColor
 import requests
 from io import BytesIO
-import time
 import threading
 
 # MMR Ranges
@@ -139,8 +137,9 @@ class LTRCImageGenerator:
             if size and img.size != size:
                 return img.resize(size)
             return img.copy()
-        
-        except Exception as e:
+        except (FileNotFoundError, IOError, requests.RequestException) as e:
+            # Log the error if needed
+            print(f"Error loading image from {source}: {e}")
             return None
 
     def _get_rank_icon_path(self, rank):
@@ -167,19 +166,23 @@ class LTRCImageGenerator:
         
         return img
 
-    def _render_header(self, img, subtitle=None):
+    def _render_header(self, img, title=None, subtitle=None):
         """
         Render the header section with title and subtitle
         
         Args:
             img: The PIL image to draw on
+            title: Optional custom title text (overrides default format title)
             subtitle: Optional custom subtitle text
         """
         draw = ImageDraw.Draw(img)
         
         # === Render title ===
         title_font = ImageFont.truetype(self.font_file, self.header_config['title_size'])
-        title_text = f"{self.format_type} Results"
+        
+        # Use custom title if provided, otherwise use default format title
+        title_text = title if title else f"{self.format_type} Results"
+        
         title_width = draw.textlength(title_text, font=title_font)
         title_x = (self.width - title_width) // 2
         title_y = self.header_config['title_y']
@@ -834,8 +837,6 @@ class LTRCImageGenerator:
         if not paths_to_load:
             return
         
-        start_time = time.time()
-        
         # Update progress tracking
         self.total_steps += len(paths_to_load)
         
@@ -844,17 +845,16 @@ class LTRCImageGenerator:
             self._load_image(path)
             self._update_progress(1, f"Preloaded: {os.path.basename(path)}")
             
-        elapsed_time = time.time() - start_time
 
-    def generate(self, results, subtitle=None):
+    def generate(self, results, subtitle=None, title=None):
         """
         Generate the tournament results image
         
         Args:
             results: List of player/team results to display
             subtitle: Optional subtitle text for the image
+            title: Optional custom title (e.g., "200cc FFA Results" or "32 track 4vs4 Results")
         """
-        start_time = time.time()
         
         # Reset progress tracking
         self.completed_steps = 0
@@ -880,11 +880,9 @@ class LTRCImageGenerator:
                 mii_urls.append(player["mii"]) 
                 
         if mii_urls:
-            prefetch_start = time.time()
             for url in mii_urls:
                 self._load_image(url)
                 self._update_progress(1, f"Loaded Mii: {os.path.basename(url)[:30]}")
-            elapsed = time.time() - prefetch_start
     
         # Update progress for starting the rendering process
         self._update_progress(0, "Rendering tournament results image...")
@@ -893,7 +891,7 @@ class LTRCImageGenerator:
         content_img = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
         
         # Combine all rendering steps
-        content_img = self._render_header(content_img, subtitle)
+        content_img = self._render_header(content_img, title, subtitle)
         content_img = self._render_podium(content_img, results)
         if len(results) > self.podium_count:
             content_img = self._render_regular_players(content_img, results)
@@ -922,8 +920,5 @@ class LTRCImageGenerator:
         # Paste the shadowed content onto the background
         final_img.paste(shadowed_img, (x_pos, y_pos), shadowed_img)
         self._update_progress(1, "Final image composition completed")
-        
-        # Report total generation time
-        elapsed_time = time.time() - start_time
         
         return final_img

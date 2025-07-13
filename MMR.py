@@ -48,7 +48,7 @@ class LTRC_manager():
             config = json.load(f)
             
         # Get sheetname from config
-        self.sheetname = config.get('sheetname', 'LTRC Manager MMR calculator')
+        self.sheetname = config['sheetname']
 
         # Define the scope
         scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive.file','https://www.googleapis.com/auth/drive']
@@ -755,7 +755,7 @@ class LTRC_manager():
             formula = mii
         else:
             # Use default Mii if player not found or no Mii set
-            formula = self.Playerdata.acell("V29", value_render_option=ValueRenderOption.formula).value
+            formula = self.Playerdata.acell("V30", value_render_option=ValueRenderOption.formula).value
             
         # Extract URL from formula
         if formula and 'IMAGE' in formula:
@@ -821,7 +821,7 @@ class LTRC_manager():
                     cell_ranges.append(f"{chr(64+5)}{row}")  # Column E = 5
                 
                 # Add the default Mii cell to the batch request
-                default_mii_cell = "V29"
+                default_mii_cell = "V30"
                 cell_ranges.append(default_mii_cell)
                 
                 # Execute batch request for formulas
@@ -906,16 +906,16 @@ if __name__ == "__main__":
         LTRC.fill_MMR_change_table()
         LTRC.fill_rank_change_table()
         
-        # Update the player data in the sheets
-        LTRC.update_sheet()
-        LTRC.update_placements_MMR()
+    #     # Update the player data in the sheets
+    #     LTRC.update_sheet()
+    #     LTRC.update_placements_MMR()
         
-        # Retrieve and display results
-        results = LTRC.get_results()
+    #     # Retrieve and display results
+    #     results = LTRC.get_results()
         
-        print("\nProcessing complete. Results summary:")
-        for i, player in enumerate(results[:3]):  # Show top 3 players
-            print(f"{i+1}. {player['name']}: {player['score']} points, MMR change: {player['mmr_change']}")
+    #     print("\nProcessing complete. Results summary:")
+    #     for i, player in enumerate(results[:3]):  # Show top 3 players
+    #         print(f"{i+1}. {player['name']}: {player['score']} points, MMR change: {player['mmr_change']}")
             
     except Exception as e:
         print(f"An error occurred: {str(e)}")
