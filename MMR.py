@@ -635,9 +635,8 @@ class LTRC_manager():
             cell_list = []
             for idx, (row, column, value) in enumerate(self.placement_updates):
                 cell_list.append(gspread.cell.Cell(row, column, value))
-                
-        # Execute the batch update
-        self.Placements.update_cells(cell_list)
+                # Execute the batch update
+                self.Placements.update_cells(cell_list)     
         
         # Count how many placed players we need to update
         placed_players = [i for i, is_placed in enumerate(self.is_placed) if is_placed]
