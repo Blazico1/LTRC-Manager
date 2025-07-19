@@ -185,7 +185,7 @@ class LTRC_manager():
         
         # Check each racer to see if they exist in the Playerdata sheet
         for racer in self.racers:
-            cell = self.Playerdata.find(racer)
+            cell = self.Playerdata.find(racer, case_sensitive=False)
             if cell is None:
                 # If the racer is not found, add them to the new_players list
                 new_players.append(racer)
@@ -327,7 +327,7 @@ class LTRC_manager():
                     if racer in playerdata_rows:
                         row_playerdata = playerdata_rows[racer]
                     else:
-                        row_playerdata = self.Playerdata.find(racer).row
+                        row_playerdata = self.Playerdata.find(racer, case_sensitive=False).row
                         playerdata_rows[racer] = row_playerdata
                     
                     previous_season_MMR = self.Playerdata.cell(row_playerdata, 11).value
@@ -647,7 +647,7 @@ class LTRC_manager():
         
         for i in placed_players:
             # Get the row of the racer
-            row = self.Playerdata.find(self.racers[i]).row
+            row = self.Playerdata.find(self.racers[i], case_sensitive=False).row
             
             # Update the MMR of the racer
             self.Playerdata.update_cell(row, 4, int(self.MMR_new[i]))
@@ -749,7 +749,7 @@ class LTRC_manager():
             str: URL to the player's Mii image or default Mii if not found
         """
         # Find the player in the sheet and get their Mii
-        cell = self.Playerdata.find(player)
+        cell = self.Playerdata.find(player, case_sensitive=False)
         if cell and (mii := self.Playerdata.cell(cell.row, 5, value_render_option=ValueRenderOption.formula).value):
             formula = mii
         else:
@@ -805,12 +805,9 @@ class LTRC_manager():
             # First, try to find the row numbers for these players
             rows = {}
             for player in winning_team:
-                try:
-                    cell = self.Playerdata.find(player)
-                    if cell:
-                        rows[player] = cell.row
-                except:
-                    pass
+                cell = self.Playerdata.find(player, case_sensitive=False)
+                if cell:
+                    rows[player] = cell.row
                 
             # If we found any players, get their Mii formulas in a batch
             if rows:
